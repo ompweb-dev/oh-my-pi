@@ -85,6 +85,7 @@ import { isUserQueuedMessage } from "./queued-messages";
 import type { TurnClaim, TurnlessAgent } from "./turn-gate";
 import { sameMessageContent, sessionMessagePersistenceKey } from "./turn-persistence";
 import { journalJudgmentUsage } from "../judgment";
+import type { WorkPoolYieldItem } from "../task/workpool-yield";
 import { classifyUnexpectedStop, isUnexpectedStopCandidate } from "./unexpected-stop-classifier";
 
 import {
@@ -303,6 +304,10 @@ export interface TurnRecoveryHost {
 		shouldContinue?: () => boolean;
 		/** `"user"`: a user's retry, which cancels a held `subagent_stop` pass; unset, the running work's own recovery. */
 		claim?: "user";
+		/** Called synchronously as the turn gate admits the continued turn, right before the agent claims it. */
+		onTurnAdmitted?: () => void;
+		/** The continued turn's pooled yield contract, installed once the turn may run. */
+		workPoolYieldItems?: readonly WorkPoolYieldItem[];
 		onError?: (error: unknown) => void;
 	}): void;
 	/**
@@ -3523,7 +3528,13 @@ export class TurnRecovery {
 	 *
 	 * @returns true if retry was initiated, false if no failed turn to retry or agent is busy
 	 */
-	async retry(prunedTerminalFailure?: AssistantMessage): Promise<boolean> {
+	async retry(
+		prunedTerminalFailure?: AssistantMessage,
+		options?: {
+			onTurnAdmitted?: () => void;
+			workPoolYieldItems?: readonly WorkPoolYieldItem[];
+		},
+	): Promise<boolean> {
 		if (this.#host.isStreaming() || this.#host.isCompacting() || this.isRetrying) return false;
 
 		const messages = this.#host.agent.state.messages;
@@ -3557,7 +3568,7 @@ export class TurnRecovery {
 		this.#retryAttempt = 0;
 
 		// Re-attempt the turn
-		this.#host.scheduleAgentContinue({ source: "manual-retry", delayMs: 1, claim: "user" });
+		this.#host.scheduleAgentContinue({ source: "manual-retry", delayMs: 1, claim: "user", ...options });
 
 		return true;
 	}
