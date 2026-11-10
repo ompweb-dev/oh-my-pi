@@ -1,5 +1,5 @@
 import { type } from "@oh-my-pi/omptype";
-import type { Usage } from "@oh-my-pi/pi-ai";
+import type { Effort, Usage } from "@oh-my-pi/pi-ai";
 import type { ThemeColor } from "../theme/theme";
 import type { ConfiguredThinkingLevel } from "../render/render-utils";
 import type { ToolRenderer } from "./renderer";
@@ -2270,6 +2270,8 @@ export interface TaskItem {
 	solutionSpace?: string;
 	/** Per-spawn thinking effort: lowest/middle/highest level the resolved model supports. Overrides the agent's default selector (e.g. `auto`). */
 	effort?: "lo" | "med" | "hi";
+	/** Exact per-spawn thinking level (`task.enableActualEffort`); overrides `effort`, loses to a definition-pinned level. */
+	actualEffort?: Effort;
 	/** Caller-provided output schema; its presence overrides the selected agent's schema. */
 	outputSchema?: unknown;
 	/** Validation behavior for a caller-provided or inherited output schema. */
@@ -2301,6 +2303,8 @@ export interface TaskParams {
 	solutionSpace?: string;
 	/** Per-spawn thinking effort (flat form): lowest/middle/highest level the resolved model supports. */
 	effort?: "lo" | "med" | "hi";
+	/** Exact per-spawn thinking level (flat form); see {@link TaskItem.actualEffort}. */
+	actualEffort?: Effort;
 	/** Caller-provided output schema; its presence overrides the selected agent's schema. */
 	outputSchema?: unknown;
 	/** Validation behavior for a caller-provided or inherited output schema. */
