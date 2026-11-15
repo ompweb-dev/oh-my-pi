@@ -1,0 +1,30 @@
+diff --git a/packages/coding-agent/src/task/executor.ts b/packages/coding-agent/src/task/executor.ts
+index 298bc78020011a53fba5300cbb64b5aeee9411b5..3602d00955c5f60d53da048dfbe9d1f167190fec 100644
+--- a/packages/coding-agent/src/task/executor.ts
++++ b/packages/coding-agent/src/task/executor.ts
+@@ -5719,16 +5719,15 @@ async function runSubprocessOnThisThread(options: ExecutorOptions): Promise<Sing
+ 					...(perCallModelGrants || allowedProvider !== undefined
+ 						? {
+ 								assertDispatchModel: (dispatchModel: Model) => {
+-								if (allowedProvider !== undefined && dispatchModel.provider !== allowedProvider) {
+-									throw new Error("Offline mode: subagent dispatch must use the active parent provider.");
+-								}
+-								if (perCallModelGrants) {
+-									assertPerCallModelApproved(dispatchModel, perCallModelGrants, modelRegistry);
+-								}
+-								const dispatchCeiling = spawnEffortCeiling?.(dispatchModel);
+-								if (dispatchCeiling) {
+-									assertModelSupportsEffortCeiling(dispatchModel, dispatchCeiling, ceilingSetting?.id);
+-								}
++									if (allowedProvider !== undefined && dispatchModel.provider !== allowedProvider) {
++										throw new Error("Offline mode: subagent dispatch must use the active parent provider.");
++									}
++									if (perCallModelGrants) {
++										assertPerCallModelApproved(dispatchModel, perCallModelGrants, modelRegistry);
++									}
++									const dispatchCeiling = spawnEffortCeiling?.(dispatchModel);
++									if (dispatchCeiling) {
++										assertModelSupportsEffortCeiling(dispatchModel, dispatchCeiling, ceilingSetting?.id);
+ 									}
+ 								},
+ 								...(perCallModelGrants ? { disableModelFallback: true } : {}),

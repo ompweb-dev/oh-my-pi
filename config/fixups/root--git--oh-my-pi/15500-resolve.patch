@@ -1,0 +1,18 @@
+diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
+index d603d0aa0c66e59af0fb83a39390d847b3052d23..aa76e7aee54e0636002dcdd09a95ea7d002629e0 100644
+--- a/packages/coding-agent/CHANGELOG.md
++++ b/packages/coding-agent/CHANGELOG.md
+@@ -6,3 +6,2 @@
+ 
+-<<<<<<< ours
+ - Added per-role skill visibility control for subagents via agent frontmatter: `skills` (allowlist globs; `"none"`/`[]` lists none), `hideSkills` (denylist globs, highest precedence), and `unhideSkills` (re-exposes skills whose `SKILL.md` sets `hide: true`) — see [#4570](https://github.com/can1357/oh-my-pi/issues/4570). Controls the rendered `<skills>` block only; hidden skills remain loadable via `skill://<name>` (and `/skill:<name>` where the session has a slash dispatcher, i.e. the main session). Vibe workers (`vibe_spawn`) resolve the parent session's skill list through the same per-role filter (bundled vibe agents set no visibility frontmatter, so the listing passes through unchanged); `autoloadSkills` preloads any named skill, including one hidden from the listing.
+@@ -14,2 +13,3 @@
+ - Added the `retry.preferSlowMode` setting ("Prefer Slow Mode Over Fallback"): with `/slow` on a Claude subscription model, usage-aware fallback keeps Claude past its usage limits on low priority and switches models only when Claude refuses a request, such as at the weekly limit ([#14365](https://github.com/can1357/oh-my-pi/pull/14365) by [@andrebrait](https://github.com/andrebrait)).
++- Added the `subagent_stop` extension event, the subagent counterpart of `session_stop` and of Claude Code's `SubagentStop` hook: handlers can refuse a task or subagent result and send the subagent back to work before the result is published ([#15500](https://github.com/can1357/oh-my-pi/pull/15500) by [@obabac](https://github.com/obabac) and [@andrebrait](https://github.com/andrebrait))
+ 
+@@ -26,5 +26,2 @@
+ - `omp auth-gateway` no longer advertises or falls back to models its routes refuse (on-device `local-inference` runners, the Codex `gpt-image-2` Responses model), so `/v1/models` lists only servable models and a stdio fallback chain never ends on a guaranteed `400` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
+-=======
+-- Added the `subagent_stop` extension event, the subagent counterpart of `session_stop` and of Claude Code's `SubagentStop` hook: handlers can refuse a task or subagent result and send the subagent back to work before the result is published ([#15500](https://github.com/can1357/oh-my-pi/pull/15500) by [@obabac](https://github.com/obabac) and [@andrebrait](https://github.com/andrebrait))
+->>>>>>> theirs
+ 

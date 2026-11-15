@@ -1,51 +1,19 @@
 diff --git a/packages/ai/CHANGELOG.md b/packages/ai/CHANGELOG.md
-index e6922cc056586c3d08c882f422142414e351febd..f9f653fc33e554f23d59f623495414c1924444f2 100644
+index 3a4a0d69adf64721e207cd4888ef31e0e5113621..a53060415c25f6558959197a290e7aeaf0be9ea0 100644
 --- a/packages/ai/CHANGELOG.md
 +++ b/packages/ai/CHANGELOG.md
-@@ -58,15 +58,12 @@
- - Fixed concurrent OAuth requests rejected as `claude_code_version_too_old` failing instead of retrying with the required version ([#18651](https://github.com/can1357/oh-my-pi/issues/18651))
- - Chat Completions gateway requests preserve explicit tool strict-mode choices, so Codex tools can omit optional arguments when callers set `strict: false` ([#18672](https://github.com/can1357/oh-my-pi/pull/18672) by [@0xeb](https://github.com/0xeb)).
+@@ -91,3 +91,2 @@
  
 -<<<<<<< ours
  ### Changed
- 
+@@ -95,3 +94,2 @@
  - Developer messages carrying passive tool context now include a persisted presentation marker for host UIs; providers still receive only the message role and content ([#13269](https://github.com/can1357/oh-my-pi/pull/13269) by [@andrebrait](https://github.com/andrebrait)).
 -=======
  ### Added
- 
+@@ -99,3 +97,2 @@
  - Added Codex subscription speech-to-text: `transcribeAudio` and the auth gateway's `/v1/audio/transcriptions` now accept the `openai-codex/codex-transcribe` model and transcribe with an existing `openai-codex` login (WAV, MP3, M4A, FLAC, WebM and Ogg/Opus; uploads are renamed to match their container, since the backend rejects mismatched extensions) ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
 ->>>>>>> theirs
  
- ## [18.18.7] - 2026-11-10
- 
-diff --git a/packages/catalog/src/compat/rules.json b/packages/catalog/src/compat/rules.json
-index eb9b1b30e6c9e6eba01c9e5f51cb3df77f05516c..166313525d93f3f04630438a8a03b4c9e8d01c28 100644
-GIT binary patch
-delta 686
-zcmZ8fOK4L;6lEqid8r24Mw=>#?<Lk^Ktu8x(^?RusS#9~qLgNp<mFRs(&p1dv5V5Q
-z6p9r@P;%V(DF{MUC>V)?WFvGVL_}AL3pau;YPuHGc@3?f#SAm&o^#K=bLYczx&Bfv
-zEwBZ?V5pEBhHsFp$W2fiTruiKaMU0n6Q%&7SILG_o?LKGlW9kBO3M`DQ{%BDHuh2{
-zf->!ca+yr!80|#hL6fY)9iiQ5i%<pj674}FN^Tu%K}VEc;n_E~YuoJ*<Pew8s&Yj?
-z88M_$4f)zusy8kXt*;omFdL&8-lHO)q|>M;=s1*1T*hjQ+HtqR+u>Rw1z+NHrd-)l
-zD;o9SaYC5JXPSk0aBs!n)HgG}Ch0cwfmNtOZ&JngF*4!AJlWA0qeb4^hmDKm$FP-I
-zQNKVbCV(~8fwmXIQz$GbO;8s~Z<!f0lQe4Z^!aqj6MpO{mQ!>ct`z0C>V{VPNA@mF
-z{jj9z78+~J_E$a;nC7bIf4;D}!#%yocauYZI`6h;h^hGeiyhcRZ{9dZW#Sh6JShqs
-z%8;L{KG?&ewcIQ{LM|&xo?C3b&VH<B={@&)n*?#`M9wcJkS@_uld6xuD*8Odxlcvp
-zH9NStULdiI)%AjD=p#Y{QmZkZO(d@%IwFl!=Yo=xVfBZ}?A%0;{P{7C!;XwLnRN6!
-q{5oG59FG^Z;&?WL<)CE4KtOUpE*M+zDJY%A{qxd%_35zm@Y-*5CFyVg
-
-delta 630
-zcmY*XPe_w-80Po;o^M;r!c{8|!_8LFKi2nsZn_0VXy&DZdFVJ->C~J}V+I`-mV!ZA
-zgVi2_Zq*?>C=@KvKuaPp)Vd@^utVW7gGlJ0eP5cb!+ZEW@B2JF@AG?SC%hk@d;12&
-zfE-Ys!5bAp`l7fas;E!H%|Z)|Y}siyA2;JEFMHH&ETmwgFAgmmZrWkt`&oz~BO(^D
-zflGeH&dIa*${!K=Z(8SkK-xGvqU>SWd8DNtVMP=t*%$}d)`}YXdZm{&Ef|)SRcpP!
-zT8CNRidPIhEE4?1#ZyI3ota*!91Y0b96O?@yxoRtvMNNeEGyPL7rGG04jB$6+i{Mo
-zKc#;IAC`JGzrPl4PQF*RY``8ay$~+;y%P><9Vn&tMQq|~2f{LJ6e-6p;Dgk|bhX1^
-zB7vj4H!b{p(}^At&Mljk{)A?Zo#3H)v6-Jc;pBJ%2dx-P)){I;LghCpcd_tNI60a&
-zqbyINL~23y?8CZ(xxy`}RsW9!vY962AWOJX4;L3NqE70SR)Pk{`mvp{1vq#miTk|X
-zk234;JnN0Crj2+v@~oZ0P99Gp#O^w&va1KVwM%HQ*iQD1DCI0&fRTT63FATrBW#`#
-zdpR>`rt)?|_;WX~m0BA1!MPO7QuA{uo9z>8@7nA0#~SSi1RGauYW_i!{mISW8WY=7
-
 diff --git a/packages/catalog/src/models.json b/packages/catalog/src/models.json
 index c49a12f216faa3c4ef415a963da416c6733a83c8..ad0f6151540ac345f0faad6c0c4313cc5131ac5f 100644
 GIT binary patch
@@ -7484,33 +7452,23 @@ zr&&I3n#O2FJnXf+EU%Q_Oqig2`74NdG4R-RXZ^UT7D)k+Y5A&E*>#Agt_&04*H6E`
 ynVcDLxCS>Bq-O<>d!)c3TekJ#?|%c-6px{RBWgK+@_-dEYZ84Z{Z+s^_wPR)4}i=7
 
 diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
-index cf908a1ebcb242ade21b32fd5cad88ffa89c4085..280630d28247275836e962518009e9ce9909609c 100644
+index 696ea0d1e2b3bacd8ebf87b1182e735644366034..fec3bd600603dcf67c6f3b54b87862a05b8d65c5 100644
 --- a/packages/coding-agent/CHANGELOG.md
 +++ b/packages/coding-agent/CHANGELOG.md
-@@ -2,7 +2,6 @@
- 
- ## [Unreleased]
+@@ -4,3 +4,2 @@
  
 -<<<<<<< ours
  ### Added
- 
- - Added per-role skill visibility control for subagents via agent frontmatter: `skills` (allowlist globs; `"none"`/`[]` lists none), `hideSkills` (denylist globs, highest precedence), and `unhideSkills` (re-exposes skills whose `SKILL.md` sets `hide: true`) — see [#4570](https://github.com/can1357/oh-my-pi/issues/4570). Controls the rendered `<skills>` block only; hidden skills remain loadable via `skill://<name>` (and `/skill:<name>` where the session has a slash dispatcher, i.e. the main session). Vibe workers (`vibe_spawn`) resolve the parent session's skill list through the same per-role filter (bundled vibe agents set no visibility frontmatter, so the listing passes through unchanged); `autoloadSkills` preloads any named skill, including one hidden from the listing.
-@@ -23,11 +22,7 @@
- ### Fixed
+@@ -24,8 +23,4 @@
  
  - Fixed an unknown `skill://` name listing hidden skills as available to the model ([#14049](https://github.com/can1357/oh-my-pi/pull/14049) by [@andrebrait](https://github.com/andrebrait)).
 -=======
 -### Fixed
 -
--- `omp auth-gateway` no longer advertises or falls back to models its routes refuse (on-device `local-inference` runners, the Codex `gpt-image-2` Responses model), so `/v1/models` lists only servable models and a stdio fallback chain never ends on a guaranteed `400` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
+ - `omp auth-gateway` no longer advertises or falls back to models its routes refuse (on-device `local-inference` runners, the Codex `gpt-image-2` Responses model), so `/v1/models` lists only servable models and a stdio fallback chain never ends on a guaranteed `400` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
 ->>>>>>> theirs
-+- `omp auth-gateway` no longer advertises or falls back to models its routes refuse (on-device `local-inference` runners, the Codex `gpt-image-2` Responses model), so `/v1/models` lists only servable models and a stdio fallback chain never ends on a guaranteed `400` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait])
  
- ## [18.20.0] - 2026-11-12
- 
-@@ -254,12 +249,9 @@
- 
- ### Added
+@@ -302,8 +297,5 @@
  
 -<<<<<<< ours
  - Added custom OpenAI-compatible provider management and comment-preserving `models.yml` editing ([#13874](https://github.com/can1357/oh-my-pi/pull/13874) by [@andrebrait](https://github.com/andrebrait)).
@@ -7518,6 +7476,4 @@ index cf908a1ebcb242ade21b32fd5cad88ffa89c4085..280630d28247275836e962518009e9ce
  - Added the Codex Dictation speech-to-text model: select `openai-codex/codex-transcribe` as the dictation model to transcribe voice input with your ChatGPT/Codex subscription login ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
  - Added speech-to-text, text-to-speech and image model selectors (e.g. `openai-codex/codex-transcribe`) to `omp auth-gateway stdio`, which previously answered 404 for anything but chat models ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
 ->>>>>>> theirs
- 
- ## [18.18.7] - 2026-11-10
  
