@@ -17,6 +17,10 @@ It shares no history with `main` and is **never merged** anywhere.
 
 Design: kahme247/ompweb `docs/specs/2026-11-12-omp-build-in-ompweb-design.md`.
 
+Repair artifacts preserve added, modified, and deleted fixups so a successful
+repair does not recur on the next round. Run `bash scripts/collect-round.test.sh`
+to verify that a publishing checkout can replay the complete repair.
+
 ## Because this is the default branch
 
 - Sync `main` only with `integration` or `gh repo sync ompweb-dev/oh-my-pi -b main`.
