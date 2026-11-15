@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Host tool adapters can identify role-backed agents without inferring roles from resolved model IDs ([#19379](https://github.com/can1357/oh-my-pi/pull/19379) by [@andrebrait](https://github.com/andrebrait))
+
 ## [18.22.0] - 2026-11-16
 
 ### Breaking Changes
