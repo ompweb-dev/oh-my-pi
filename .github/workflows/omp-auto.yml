@@ -44,6 +44,9 @@ on:
             default: ""
 
 run-name: omp auto-integration ${{ inputs.tag || 'latest' }}${{ inputs.candidate && ' (repaired build)' || '' }}
+concurrency:
+   group: omp-auto-integration
+   cancel-in-progress: false
 
 permissions: {}
 
