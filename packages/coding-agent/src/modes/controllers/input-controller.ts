@@ -3279,7 +3279,7 @@ export class InputController {
 				if (!runner.isExtensionActive(shortcut.extensionPath)) return;
 				const ctx = runner.createCommandContext();
 				try {
-					runner.runScoped(() => shortcut.handler(ctx));
+					runner.runExtensionCallback(shortcut.extensionPath, () => runner.runScoped(() => shortcut.handler(ctx)));
 				} catch (err) {
 					runner.emitError({
 						extensionPath: shortcut.extensionPath,

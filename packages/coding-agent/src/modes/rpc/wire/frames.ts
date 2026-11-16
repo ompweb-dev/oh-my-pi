@@ -168,6 +168,10 @@ export const frameDefs = {
 		id: "string",
 		method: "'select'",
 		title: "string",
+		"extensionId?": doc(
+			"string",
+			"Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs.",
+		),
 		options: "string[]",
 		"optionDetails?": "SelectOptionDetail[]",
 		"initialIndex?": doc("number.integer", "Index into `options` to focus first."),
@@ -188,6 +192,10 @@ export const frameDefs = {
 		method: "'confirm'",
 		title: "string",
 		message: "string",
+		"extensionId?": doc(
+			"string",
+			"Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs.",
+		),
 		"timeout?": "number.integer",
 	},
 	InputUiRequest: {
