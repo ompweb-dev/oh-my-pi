@@ -747,7 +747,6 @@ function buildExecutorOptions(
 	id: string,
 ): ExecutorOptions {
 	const { session } = request;
-	const preparedSession = policy.preparedSession;
 	const { skills, autoloadSkills } = resolveAgentSkillsForExecutor(session, policy.agent);
 	const localProtocolOptions = sessionLocalProtocolOptions(session);
 	const restrictToolNames = policy.planMode || session.restrictToolNames === true;
