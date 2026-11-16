@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Codex Dictation remaining available after a successful Codex model refresh ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait)).
+
 ## [18.21.0] - 2026-11-16
 
 ### Added
