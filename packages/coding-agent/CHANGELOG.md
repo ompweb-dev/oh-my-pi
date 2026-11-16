@@ -15,6 +15,7 @@
 - The task tool can take an exact per-spawn thinking level with `actualEffort` (`minimal`…`max`), enabled by `task.enableActualEffort` and capped by the new `task.maxActualEffort`; it takes `effort`'s precedence one step above it, replacing `effort` entirely ([#18780](https://github.com/can1357/oh-my-pi/pull/18780) by [@andrebrait](https://github.com/andrebrait))
 - SDK embedders can run a fully started session in their own host: pass `runSessionHost` to `runRootCommand` and the launch keeps the normal startup (settings, auth, `--resume`/`--model`/`--tools`, extensions, MCP) with `--mode rpc-ui`'s protocol-host behavior, then hands over the session and its tool-UI setter instead of starting the TUI, print or RPC mode ([#19075](https://github.com/can1357/oh-my-pi/pull/19075) by [@andrebrait](https://github.com/andrebrait))
 - RPC extension select and confirm requests now carry an opaque source identity for client-side grant attribution; native/core dialogs omit it
+- Host tool adapters can identify the agent and active model role behind each tool call without inferring roles from resolved model IDs ([ompweb-dev/oh-my-pi#62](https://github.com/ompweb-dev/oh-my-pi/pull/62))
 
 ### Changed
 
