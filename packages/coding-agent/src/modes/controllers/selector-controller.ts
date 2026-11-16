@@ -1298,6 +1298,7 @@ export class SelectorController {
 			proseOnlyThinking: () => this.ctx.proseOnlyThinking,
 			expandThinkingBlocks: () => this.ctx.expandThinkingBlocks,
 			linkTargets: getAssistantMessageLinkTargets(this.ctx),
+			proseGithubRepo: at => this.ctx.proseGithubRepo(at),
 			requestRender: () => this.ctx.ui.requestRender(),
 			siblingPaths: entryId => this.#siblingBranchPaths(entryId),
 			startAt,
@@ -1537,6 +1538,7 @@ export class SelectorController {
 			proseOnlyThinking: () => this.ctx.proseOnlyThinking,
 			expandThinkingBlocks: () => this.ctx.expandThinkingBlocks,
 			linkTargets: getAssistantMessageLinkTargets(this.ctx),
+			proseGithubRepo: at => this.ctx.proseGithubRepo(at),
 			requestRender: () => this.ctx.ui.requestRender(),
 			onPick: (content, label) => {
 				done();
