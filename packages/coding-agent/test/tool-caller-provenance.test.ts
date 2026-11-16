@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { type } from "@oh-my-pi/omptype";
+import * as path from "node:path";
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { unregisterCustomApis } from "@oh-my-pi/pi-ai/api-registry";
 import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
+import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
 import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import {
@@ -18,6 +20,7 @@ import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import type { AgentToolCaller } from "../src/tools/context";
 import { createInMemoryAuthStorage } from "./helpers/agent-session-setup";
+import { localSession } from "./helpers/local-session";
 
 interface HarnessOptions {
 	modelRole?: string;
@@ -206,6 +209,16 @@ describe("tool caller provenance", () => {
 		expect(result.caller).toEqual({ agentId: "Main", modelRole: "plan" });
 		expect(result.lastModelRole).toBe("plan");
 	});
+	it("keeps a roleless explicit-model session's caller role absent", async () => {
+		const result = await captureCaller({
+			beforePrompt: sessionManager => {
+				sessionManager.appendModelChange("mock/explicit");
+			},
+		});
+
+		expect(result.caller).toEqual({ agentId: "Main" });
+		expect(result.lastModelRole).toBe("default");
+	});
 
 	it("keeps spawned semantic role separate from retry routing at the live tool boundary", async () => {
 		const root = TempDir.createSync("@pi-tool-caller-spawn-");
@@ -213,6 +226,7 @@ describe("tool caller provenance", () => {
 		const sourceId = `tool-caller-${crypto.randomUUID()}`;
 		const agentId = "Parent.Child";
 		registerMockApi(sourceId);
+		const lifecycle = AgentLifecycleManager.global();
 		auth.keys.setRuntime("mock", "test-key");
 		const model = createMockModel({
 			id: "role-worker",
@@ -334,8 +348,7 @@ describe("tool caller provenance", () => {
 			expect(taskFallback.calls.length).toBeGreaterThan(0);
 			expect(defaultFallback.calls).toHaveLength(0);
 		} finally {
-			await AgentRegistry.global().get(agentId)?.session?.dispose();
-			AgentRegistry.global().unregister(agentId);
+			await lifecycle.release(agentId);
 			unregisterCustomApis(sourceId);
 			auth.close();
 			root.removeSync();
@@ -400,6 +413,219 @@ describe("tool caller provenance", () => {
 				await harness.session.dispose();
 				AgentRegistry.global().unregister(harness.caller()?.agentId ?? "");
 			}
+			auth.close();
+			root.removeSync();
+		}
+	});
+});
+describe("real nested task provenance", () => {
+	it("preserves identity and role across a real nested spawn chain and warm revival", async () => {
+		const root = TempDir.createSync("@pi-tool-caller-chain-");
+		const auth = createInMemoryAuthStorage();
+		auth.keys.setRuntime("mock", "test-key");
+		await Bun.write(
+			path.join(root.path(), ".omp", "agents", "provenance-child.md"),
+			`---
+name: provenance-child
+description: Spawn a nested provenance probe.
+model: "@plan"
+tools: [read]
+spawns: [provenance-grandchild]
+blocking: true
+---
+Read the probe file and spawn the nested reviewer.`,
+		);
+		await Bun.write(
+			path.join(root.path(), ".omp", "agents", "provenance-grandchild.md"),
+			`---
+name: provenance-grandchild
+description: Read the probe file.
+model: "@review"
+tools: [read]
+blocking: true
+---
+Read the probe file.`,
+		);
+		await Bun.write(path.join(root.path(), "probe.txt"), "provenance probe");
+		const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
+			content: [{ type: "toolCall" as const, id, name, arguments: args }],
+			stopReason: "toolUse" as const,
+		});
+		const models = [
+			createMockModel({
+				id: "provenance-parent",
+				responses: [
+					toolCall("parent-read", "read", { path: "probe.txt" }),
+					toolCall("parent-child", "task", {
+						agent: "provenance-child",
+						name: "Child",
+						task: "Run a nested provenance check.",
+					}),
+					{ content: ["parent done"], stopReason: "stop" },
+				],
+			}),
+			createMockModel({
+				id: "provenance-child",
+				responses: [
+					toolCall("child-read", "read", { path: "probe.txt" }),
+					toolCall("child-grandchild", "task", {
+						agent: "provenance-grandchild",
+						name: "Grandchild",
+						task: "Read the probe file.",
+					}),
+					{ content: ["child done"], stopReason: "stop" },
+				],
+			}),
+			createMockModel({
+				id: "provenance-grandchild",
+				responses: [
+					toolCall("grandchild-read", "read", { path: "probe.txt" }),
+					{ content: ["done"], stopReason: "stop" },
+				],
+			}),
+		];
+		const registry = new ModelRegistry(auth);
+		const find = registry.find.bind(registry);
+		vi.spyOn(registry, "find").mockImplementation(
+			(provider, id) => models.find(model => provider === "mock" && model.id === id) ?? find(provider, id),
+		);
+		vi.spyOn(registry, "getAvailable").mockReturnValue(models);
+		vi.spyOn(registry, "getAll").mockReturnValue(models);
+		const creations: Array<{ id: string; parentAgentId?: string; modelRole?: string }> = [];
+		const callers: Array<AgentToolCaller | undefined> = [];
+		const lifecycle = AgentLifecycleManager.global();
+		const sessionManager = SessionManager.create(root.path(), path.join(root.path(), "sessions"));
+		const createAgentSession = sdkModule.createAgentSession;
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			if (!options) throw new Error("Expected nested session options");
+			const created = await createAgentSession(options);
+			const id = options.agentId ?? "Main";
+			const model = models.find(candidate => candidate.id === created.session.agent.state.model.id);
+			if (!model) throw new Error(`No scripted model for ${created.session.agent.state.model.id}`);
+			created.session.agent.streamFn = model.stream;
+			const read = created.session.agent.state.tools.find(tool => tool.name === "read");
+			if (!read) throw new Error(`Expected read tool for ${id}`);
+			const wrapped: AgentTool = {
+				...read,
+				execute(toolCallId, params, signal, onUpdate, context) {
+					callers.push(context?.caller);
+					return read.execute.call(read, toolCallId, params, signal, onUpdate, context);
+				},
+			};
+			created.session.agent.setTools(
+				created.session.agent.state.tools.map(tool => (tool === read ? wrapped : tool)),
+			);
+			creations.push({
+				id,
+				parentAgentId: options.parentAgentId,
+				modelRole: options.toolCallerModelRole ?? options.modelRole,
+			});
+			return created;
+		});
+		let main: AgentSession | undefined;
+		let childId: string | undefined;
+		let grandchildId: string | undefined;
+		try {
+			({ session: main } = await sdkModule.createAgentSession({
+				cwd: root.path(),
+				agentDir: root.path(),
+				sessionManager,
+				settings: Settings.isolated({
+					"async.enabled": false,
+					"compaction.enabled": false,
+					"retry.enabled": false,
+					"task.maxRecursionDepth": 3,
+					"todo.enabled": false,
+					"todo.reminders": false,
+					modelRoles: {
+						task: "mock/provenance-parent",
+						plan: "mock/provenance-child",
+						review: "mock/provenance-grandchild",
+					},
+				}),
+				authStorage: auth,
+				modelRegistry: registry,
+				model: models[0],
+				modelRole: "task",
+				agentId: "Main",
+				spawns: "*",
+				toolNames: ["read", "task"],
+				disableExtensionDiscovery: true,
+				skills: [],
+				contextFiles: [],
+				promptTemplates: [],
+				slashCommands: [],
+				rules: [],
+				workspaceTree: {
+					rootPath: root.path(),
+					rendered: "",
+					truncated: false,
+					totalLines: 0,
+					agentsMdFiles: [],
+				},
+				enableMCP: false,
+				enableLsp: false,
+				enableIrc: false,
+			}));
+			await sessionManager.ensureOnDisk();
+			await main.prompt("Read the probe and delegate a nested check.");
+
+			const child = creations.find(entry => entry.parentAgentId === "Main");
+			if (!child) throw new Error("Expected the parent to spawn a child");
+			const grandchild = creations.find(entry => entry.parentAgentId === child.id);
+			if (!grandchild) throw new Error("Expected the child to spawn a grandchild");
+			childId = child.id;
+			grandchildId = grandchild.id;
+			expect(creations.slice(0, 3)).toEqual([
+				{ id: "Main", parentAgentId: undefined, modelRole: "task" },
+				{ id: childId, parentAgentId: "Main", modelRole: "plan" },
+				{ id: grandchildId, parentAgentId: childId, modelRole: "review" },
+			]);
+			expect(callers.slice(0, 3)).toEqual([
+				{ agentId: "Main", modelRole: "task" },
+				{ agentId: childId, modelRole: "plan" },
+				{ agentId: grandchildId, modelRole: "review" },
+			]);
+
+			const retryHistory = (session: AgentSession) =>
+				session.sessionManager
+					.getBranch()
+					.filter(entry => entry.type === "model_change")
+					.map(entry => [entry.model, entry.role]);
+			const childHistory = retryHistory(localSession(AgentRegistry.global().get(childId)?.session));
+			const grandchildHistory = retryHistory(localSession(AgentRegistry.global().get(grandchildId)?.session));
+			await lifecycle.park(childId);
+			await lifecycle.park(grandchildId);
+			const warmChild = localSession(await lifecycle.ensureLive(childId));
+			warmChild.agent.streamFn = createMockModel({
+				responses: [
+					toolCall("child-warm-read", "read", { path: "probe.txt" }),
+					{ content: ["warm"], stopReason: "stop" },
+				],
+			}).stream;
+			await warmChild.prompt("Read the probe after warm revival.");
+			const warmGrandchild = localSession(await lifecycle.ensureLive(grandchildId));
+			warmGrandchild.agent.streamFn = createMockModel({
+				responses: [
+					toolCall("grandchild-warm-read", "read", { path: "probe.txt" }),
+					{ content: ["warm"], stopReason: "stop" },
+				],
+			}).stream;
+			await warmGrandchild.prompt("Read the probe after warm revival.");
+			expect(callers).toEqual([
+				{ agentId: "Main", modelRole: "task" },
+				{ agentId: childId, modelRole: "plan" },
+				{ agentId: grandchildId, modelRole: "review" },
+				{ agentId: childId, modelRole: "plan" },
+				{ agentId: grandchildId, modelRole: "review" },
+			]);
+			expect(retryHistory(warmChild)).toEqual(childHistory);
+			expect(retryHistory(warmGrandchild)).toEqual(grandchildHistory);
+		} finally {
+			if (grandchildId) await lifecycle.release(grandchildId);
+			if (childId) await lifecycle.release(childId);
+			await main?.dispose();
+			await sessionManager.close();
 			auth.close();
 			root.removeSync();
 		}

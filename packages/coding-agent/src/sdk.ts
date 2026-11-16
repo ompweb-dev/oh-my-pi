@@ -3928,7 +3928,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const getToolCaller = (): AgentToolCaller => {
 			const modelRole = isSubagentSession
 				? options.toolCallerModelRole
-				: sessionManager.getLastModelChangeRole({ skipEphemeral: true });
+				: sessionManager.getLastModelChangeRole({ skipEphemeral: true, preserveMissingRole: true });
 			return modelRole ? { agentId: resolvedAgentId, modelRole } : { agentId: resolvedAgentId };
 		};
 		const toolContextStore = new ToolContextStore(getSessionContext, trackUserWait, getToolCaller);
