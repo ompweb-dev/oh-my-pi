@@ -4,7 +4,6 @@
 
 ### Added
 
-- Tool execution contexts now include optional host-owned caller provenance with stable agent and model-role identity ([#19379](https://github.com/can1357/oh-my-pi/pull/19379) by [@andrebrait](https://github.com/andrebrait))
 
 ## [18.22.1] - 2026-11-17
 
