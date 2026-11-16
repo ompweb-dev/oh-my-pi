@@ -7,7 +7,8 @@ UPSTREAM=can1357/oh-my-pi
 STACKED_PRS='14458:14148 14468:14166 15685:14166 16220:14468,15685 16221:16220 16222:16221 15729:15730 15896:15729'
 # Third-party PRs carried from our fork (rebased copy). See EXTRA_PRS in the integration script.
 # 7851: szavadsky's per-role skill visibility.
-EXTRA_PRS='7851=carry/pr-7851'
+# ompweb-dev/oh-my-pi#62: tool-caller provenance for ompweb's per-model-role tool policy.
+EXTRA_PRS='7851=carry/pr-7851 ompweb-dev/oh-my-pi#62=feat/tool-caller-provenance'
 # 18668: RPC-only; ompweb's runner rebuilds its client-message correlation from the public API.
 SKIP_PRS='18668'
 BRANCH=integration
@@ -34,6 +35,8 @@ TEST_CMD+=' packages/catalog/test/compat-compile.test.ts'
 TEST_CMD+=' packages/coding-agent/test/discovery/agent-fields.test.ts packages/coding-agent/test/task/agents.test.ts packages/coding-agent/test/task/structured-subagent.test.ts packages/coding-agent/test/eval/agent-bridge.test.ts packages/coding-agent/test/task/task-schema.test.ts packages/coding-agent/test/task/task-spawn.test.ts'
 # Preserve rebased task revive/stop, skill visibility, native search, and memory worker/cache invariants.
 TEST_CMD+=' packages/coding-agent/test/task/persisted-revive.test.ts packages/coding-agent/test/task/executor-irc-wake-subagent-stop.test.ts packages/coding-agent/test/task/executor-subagent-stop.test.ts packages/coding-agent/test/task/restore-revive.test.ts packages/coding-agent/test/thread/memory-bridge.test.ts packages/coding-agent/test/cli/skill-list.test.ts packages/tui/test/tools-native-search.test.ts packages/coding-agent/test/memory-tools.test.ts packages/mnemopi/test/embedding-cache.test.ts'
+# Keep ompweb's caller-role policy separate from model fallback routing across advisors and revival.
+TEST_CMD+=' packages/coding-agent/test/tool-caller-provenance.test.ts packages/coding-agent/test/advisor-tool-call-loop-guard.test.ts packages/coding-agent/test/issue-2750-subagent-runtime-fallback.test.ts'
 # Preserve atomic provider/settings writes and skill diagnostic refresh invariants.
 TEST_CMD+=' packages/coding-agent/test/config/custom-provider.test.ts packages/coding-agent/test/launch/broker-metadata-writes.test.ts packages/coding-agent/test/settings-manager.test.ts packages/coding-agent/test/interactive-mode-skill-diagnostics.test.ts packages/coding-agent/test/skill-diagnostics-report.test.ts'
 # Keep template expansion and dropped-message errors compatible across queued delivery paths.
