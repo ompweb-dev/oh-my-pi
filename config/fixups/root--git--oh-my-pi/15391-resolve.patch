@@ -1,42 +1,28 @@
-diff --git a/packages/ai/CHANGELOG.md b/packages/ai/CHANGELOG.md
-index db0c3699b19549e15df41b8064c8130788f9a647..9bea4a855f4270ef641d7e28c2793a493c0697eb 100644
---- a/packages/ai/CHANGELOG.md
-+++ b/packages/ai/CHANGELOG.md
-@@ -102,3 +102,2 @@
- 
--<<<<<<< ours
- ### Changed
-@@ -106,3 +105,2 @@
- - Developer messages carrying passive tool context now include a persisted presentation marker for host UIs; providers still receive only the message role and content ([#13269](https://github.com/can1357/oh-my-pi/pull/13269) by [@andrebrait](https://github.com/andrebrait)).
--=======
- ### Added
-@@ -110,3 +108,2 @@
- - Added Codex subscription speech-to-text: `transcribeAudio` and the auth gateway's `/v1/audio/transcriptions` now accept the `openai-codex/codex-transcribe` model and transcribe with an existing `openai-codex` login (WAV, MP3, M4A, FLAC, WebM and Ogg/Opus; uploads are renamed to match their container, since the backend rejects mismatched extensions) ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
-->>>>>>> theirs
- 
+diff --git a/packages/catalog/src/compat/rules.json b/packages/catalog/src/compat/rules.json
+index 23245b7189959eace43d35a88b4b255284f315e0..c507e32332dfef4cc8dd269ce8a7b3145afd1336 100644
+GIT binary patch
+delta 669
+zcmY+BT}V@57{@v9dCocNj4f%-E@a0OB!kNBG^g3cMn+|V+J_fj=$vc80=F@Dk-Bf!
+zh95D_=pRK?7hXpouE2|~iY^Ml?nbdLgo3~k)J5HNwgs(=7oPX`{$8H{`@Fk%<Tv-^
+zWQNPI48KX!v)JpT7EETyfcz}Y;7YsjZ>u1Fmqggss2`;a>9EjMCm%(8jt*gBjy4e)
+zs=HP_Xk0H})*&!YFTkzRVeG7s6|M<pK{-K9*qEmyF!yp6xQk3cVuRXI+LlE8`obGA
+zoFFT+^&pj?3kW%x8Lv(=5pQFZVkgxKJ`Yz?i)KzzA3`^njNl3F36GojgV>Lf410nG
+zIXl)Kkm>){@9_LSwbj_jBSvUU(QD38XFeO?MGQHa0%w}CTn{=Lv|1aHf>ImTg7Q^C
+zSpV_cg#B%Dp_C;(rrvW#7@Fxoo%V5oCRwiom&W*x3SNQZ19c)4qh`oi8b|aNg?QC!
+zs~LtYed11GWQ<p!)fe%k$mwuBM|NJd{dH;?a<p8T&C@}lK9$za&8w=ljvMs63CTrr
+zGu465i}V#|iqwkI5`AZOdxZ>OXP6i8@*yo%KbTj$yDQT@w{@G0j5*YtDNouG3Z}fc
+z`we1H(hJ_;HQ!BG)6!_6D=Jwy7;I95rAm)S!k)m4H|(GCDaVw6XWFOqDg6~+KI`{J
+eJQ05|fZ?drigH*|kd8{DSlyH2h4Gm5bNLT!iRTmm
 
-diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
-index 31d7887b9bfc9ac2845f301b8a0d8c08d2c08fbb..4dbbe56b1aa2002782ec539e2899a381f7749993 100644
---- a/packages/coding-agent/CHANGELOG.md
-+++ b/packages/coding-agent/CHANGELOG.md
-@@ -4,3 +4,2 @@
- 
--<<<<<<< ours
- ### Added
-@@ -25,7 +24,3 @@
- - Fixed an unknown `skill://` name listing hidden skills as available to the model ([#14049](https://github.com/can1357/oh-my-pi/pull/14049) by [@andrebrait](https://github.com/andrebrait)).
--=======
--### Fixed
--
- - `omp auth-gateway` no longer advertises or falls back to models its routes refuse (on-device `local-inference` runners, the Codex `gpt-image-2` Responses model), so `/v1/models` lists only servable models and a stdio fallback chain never ends on a guaranteed `400` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
-->>>>>>> theirs
- 
-@@ -356,8 +351,5 @@
- 
--<<<<<<< ours
- - Added custom OpenAI-compatible provider management and comment-preserving `models.yml` editing ([#13874](https://github.com/can1357/oh-my-pi/pull/13874) by [@andrebrait](https://github.com/andrebrait)).
--=======
- - Added the Codex Dictation speech-to-text model: select `openai-codex/codex-transcribe` as the dictation model to transcribe voice input with your ChatGPT/Codex subscription login ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
- - Added speech-to-text, text-to-speech and image model selectors (e.g. `openai-codex/codex-transcribe`) to `omp auth-gateway stdio`, which previously answered 404 for anything but chat models ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
-->>>>>>> theirs
- 
+delta 603
+zcmZvZPe@cz6vnytea|Oh^lWCdRnCMA3NGH88Rw5H7iH~|z(r6r5V?!U+)Pb6qff`t
+zaHMj+S)@U&8{VQAva*80?U*ft5`s3f7+kdOK1G?p#f8J=JKs6q?`)NWJCB1oM>x{a
+zUgLI#HgSel4i-o6Y6jnDFe2j#e$HZqT@T=A-ztJ$^_1n`+G+kO!el9f@RL7R{On&v
+zk1BjjW-%{P++Ihw=XR4r5Ajx5481{s?tMg<o`TNdDZG?+%Co=7foU{El=jynNe+J*
+z-;^y=IJzdmtuI=b&+}+!J&%eQZ0T`lP?hmPh8&FXPEqLGn8huT;5O0ct#X3RB6@kP
+zh#S&QFzDbsKQ^^a4$R@INOJd^2+-`n$%AMc1q`ubs-)%*d5XSyOh`M)P`f;LtiWHu
+zJ>{}L%`IToOLr)avHo2xw6cInX~me^MA&1|akNodT8aO^7lh6H&jTQ5X|BP?=5<A2
+z_yrV(MLc7DT^(#?5m8o`@Igjx4`!rATEDF6eD?_DmfIeB^m=X)2F9hyW>tZ%xUz@t
+zD`lR}C<I+m*|{IHHolBYLdH@Bw*>X{np<kyX>ek>?Lw`QHTnh3ZbRp%83VPkX=88c
+EAALa9_y7O^
+
