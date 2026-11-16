@@ -1,0 +1,22 @@
+diff --git a/packages/coding-agent/src/modes/rpc/rpc-mode.ts b/packages/coding-agent/src/modes/rpc/rpc-mode.ts
+index 90f414ce1bdaf0b471c02f0b129ba3d3ba25f33b..330b1979fc03f4e6bf3cf53291a10656be9c8df0 100644
+--- a/packages/coding-agent/src/modes/rpc/rpc-mode.ts
++++ b/packages/coding-agent/src/modes/rpc/rpc-mode.ts
+@@ -32,9 +32,6 @@ import {
+ 	getExtensionUISelectOptionLabel,
+ 	timedOutAskDialogResult,
+ } from "../../extensibility/extensions";
+-<<<<<<< HEAD
+-import { loadSkillPrompt, type SkillRediscoverySource } from "../../extensibility/skills";
+-=======
+ import {
+ 	currentExtensionRequestIdentity,
+ 	runWithExtensionRequestIdentity,
+@@ -47,7 +44,6 @@ import {
+ 	type SkillPromptInput,
+ 	type SkillRediscoverySource,
+ } from "../../extensibility/skills";
+->>>>>>> rebuild/pr-19407
+ import { type Theme, theme } from "@oh-my-pi/pi-tui/theme";
+ import { AgentLifecycleManager } from "../../registry/agent-lifecycle";
+ import {

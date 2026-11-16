@@ -1,5 +1,5 @@
 diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
-index d603d0aa0c66e59af0fb83a39390d847b3052d23..aa76e7aee54e0636002dcdd09a95ea7d002629e0 100644
+index c9fd67e0f31ec2755de2a9eb1c08f8dd50709406..4e0e3645825e9936e430fcd178b08106f55c8c36 100644
 --- a/packages/coding-agent/CHANGELOG.md
 +++ b/packages/coding-agent/CHANGELOG.md
 @@ -6,3 +6,2 @@
