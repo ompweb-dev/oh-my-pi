@@ -59,6 +59,7 @@ import type {
 	AssistantMessage,
 	CodexCompactionContext,
 	Context,
+	Effort,
 	Message,
 	Model,
 	ProviderSessionState,
@@ -428,6 +429,8 @@ export interface SessionMaintenanceHost {
 	isDisposed(): boolean;
 	/** Model fallback is disabled (a per-call `model` subagent): no context promotion. */
 	modelFallbackDisabled?(): boolean;
+	/** Whether `model` can run under the session's effort ceiling ({@link ModelControls.fitsEffortCeiling}). */
+	modelFitsEffortCeiling?(model: Model): boolean;
 	isStreaming(): boolean;
 	isGeneratingHandoff(): boolean;
 	promptGeneration(): number;
@@ -3657,6 +3660,8 @@ export class SessionMaintenance {
 		if (contextWindow <= 0) return false;
 		const targetModel = await this.resolveContextPromotionTarget(currentModel, contextWindow);
 		if (!targetModel) return false;
+		// Like a retry fallback, never promote onto a model whose effort floor sits above its ceiling.
+		if (this.#host.modelFitsEffortCeiling?.(targetModel) === false) return false;
 
 		try {
 			await this.#host.setModelTemporary(targetModel, undefined, { ephemeral: true });

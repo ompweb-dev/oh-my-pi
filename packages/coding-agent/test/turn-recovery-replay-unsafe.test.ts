@@ -94,6 +94,8 @@ function createHost(
 		configuredThinkingLevel: () => undefined,
 		setThinkingLevel: () => {},
 		thinkingLevelCeiling: () => undefined,
+		modelFitsEffortCeiling: () => true,
+		clampAutoThinkingToCeiling: () => {},
 		isDisposed: () => false,
 		isStreaming: () => false,
 		isCompacting: () => false,
