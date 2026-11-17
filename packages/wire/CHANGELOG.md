@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Developer messages accept an optional `passiveToolContext` marker so hosts can recognize passive context emitted after a tool batch ([#13269](https://github.com/can1357/oh-my-pi/pull/13269) by [@andrebrait](https://github.com/andrebrait)).
+
 ## [18.22.0] - 2026-11-16
 
 ### Added
