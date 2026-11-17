@@ -19,7 +19,13 @@ import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { convertToLlm, wrapSteeringForModel } from "@oh-my-pi/pi-coding-agent/session/messages";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ExtensionRuntime, loadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
+import {
+	bindPreparedExtensions,
+	ExtensionRuntime,
+	importExtensionModule,
+	loadExtensionFromFactory,
+	loadExtensions,
+} from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
 import {
 	EXTENSION_HANDLER_TIMEOUT_MS,
 	ExtensionRunner,
@@ -35,7 +41,9 @@ import type {
 	InputEvent,
 	InputEventResult,
 } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { ExtensionToolWrapper } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/wrapper";
+import { captureExtensionRequestIdentity } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/request-identity";
+import { ExtensionToolWrapper, wrapRegisteredTool } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/wrapper";
+import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { getProjectAgentDir, logger, TempDir } from "@oh-my-pi/pi-utils";
@@ -5655,6 +5663,217 @@ describe("ExtensionRunner", () => {
 				const transformed = await runner.emitContext(messages);
 				expect(transformed.some(message => isPerCallContextMessage(message))).toBe(false);
 			}
+		});
+	});
+
+	describe("extension request identity boundaries", () => {
+		it.skipIf(process.platform === "win32")(
+			"loads and identifies the same canonical source when a lexical symlink is retargeted before binding",
+			async () => {
+				const attackerPath = path.join(extensionsDir, "attacker.ts");
+				const victimPath = path.join(extensionsDir, "victim.ts");
+				const aliasPath = path.join(tempDir.path(), "aliases", "source.ts");
+				fs.mkdirSync(path.dirname(aliasPath), { recursive: true });
+				fs.writeFileSync(
+					attackerPath,
+					`export default function(pi) { pi.registerCommand("attacker", { handler() {} }); }`,
+				);
+				fs.writeFileSync(
+					victimPath,
+					`export default function(pi) { pi.registerCommand("victim", { handler() {} }); }`,
+				);
+				fs.symlinkSync(attackerPath, aliasPath);
+
+				const prepared = await importExtensionModule(aliasPath, tempDir.path());
+				const canonicalAttackerPath = fs.realpathSync(attackerPath);
+				expect(prepared.resolvedPath).toBe(path.resolve(aliasPath));
+				expect(prepared.canonicalPath).toBe(canonicalAttackerPath);
+				fs.unlinkSync(aliasPath);
+				fs.symlinkSync(victimPath, aliasPath);
+
+				const runtime = new ExtensionRuntime();
+				const rebound = await bindPreparedExtensions([prepared], tempDir.path(), new EventBus(), runtime);
+				const extension = rebound.extensions[0];
+				if (!extension) throw new Error("Expected the rebound attacker extension");
+				const runner = new ExtensionRunner([extension], runtime, tempDir.path(), sessionManager, modelRegistry);
+				const identity = runner.runExtensionCallback(
+					extension.path,
+					() => captureExtensionRequestIdentity(runtime).identity,
+				);
+				const expectedIdentity = `ext:v1:sha256:${new Bun.CryptoHasher("sha256")
+					.update(canonicalAttackerPath)
+					.digest("hex")}`;
+
+				expect(extension.resolvedPath).toBe(path.resolve(aliasPath));
+				expect(extension.commands.has("attacker")).toBe(true);
+				expect(extension.commands.has("victim")).toBe(false);
+				expect(identity).toBe(expectedIdentity);
+			},
+		);
+
+		it("omits identity for inline tool registrations and restores their filesystem caller", async () => {
+			const ownerPath = path.join(extensionsDir, "identity-owner.ts");
+			fs.writeFileSync(ownerPath, "export default function() {}");
+			const loaded = await loadTestExtensions([ownerPath]);
+			const owner = loaded.extensions[0];
+			if (!owner) throw new Error("Expected the filesystem identity owner");
+			let observedIdentity: string | undefined;
+			const inline = await loadExtensionFromFactory(
+				pi => {
+					pi.registerTool({
+						name: "inline_identity",
+						label: "Inline",
+						description: "Inline synthetic registration",
+						parameters: Type.Object({}),
+						execute: async () => {
+							observedIdentity = captureExtensionRequestIdentity(loaded.runtime).identity;
+							return { content: [], details: observedIdentity };
+						},
+					});
+				},
+				tempDir.path(),
+				new EventBus(),
+				loaded.runtime,
+				"<inline-0>",
+			);
+			const runner = new ExtensionRunner(
+				[owner, inline],
+				loaded.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			const registered = inline.tools.get("inline_identity");
+			if (!registered) throw new Error("Expected the inline tool registration");
+			const adapter = wrapRegisteredTool(registered, runner);
+			const expectedIdentity = `ext:v1:sha256:${new Bun.CryptoHasher("sha256")
+				.update(fs.realpathSync(ownerPath))
+				.digest("hex")}`;
+
+			await runner.runExtensionCallback(owner.path, async () => {
+				await adapter.execute("inline-call", {} as never);
+				expect(captureExtensionRequestIdentity(loaded.runtime).identity).toBe(expectedIdentity);
+			});
+
+			expect(observedIdentity).toBeUndefined();
+		});
+
+		it("clears identity during native execution, restores delegated progress, then restores its caller", async () => {
+			const ownerPath = path.join(extensionsDir, "native-caller.ts");
+			fs.writeFileSync(ownerPath, "export default function() {}");
+			const loaded = await loadTestExtensions([ownerPath]);
+			const owner = loaded.extensions[0];
+			if (!owner) throw new Error("Expected the filesystem identity owner");
+			const observed: Array<string | undefined> = [];
+			const nativeTool = {
+				name: "native_identity_probe",
+				label: "Native probe",
+				description: "Observe native execution scope",
+				parameters: Type.Object({}),
+				approval: "read" as const,
+				execute: async (_id, _params, _signal, onUpdate) => {
+					const identity = captureExtensionRequestIdentity(loaded.runtime).identity;
+					observed.push(identity);
+					onUpdate?.({ content: [], details: undefined });
+					return { content: [], details: identity };
+				},
+			} as AgentTool;
+			const runner = new ExtensionRunner([owner], loaded.runtime, tempDir.path(), sessionManager, modelRegistry);
+			runner.setNativeToolResolver(name =>
+				name === nativeTool.name ? { tool: nativeTool, makeContext: () => ({}) as AgentToolContext } : undefined,
+			);
+			const wrapper = new ExtensionToolWrapper(nativeTool, runner);
+			const expectedIdentity = `ext:v1:sha256:${new Bun.CryptoHasher("sha256")
+				.update(fs.realpathSync(ownerPath))
+				.digest("hex")}`;
+			let progressIdentity: string | undefined;
+
+			const results = await runner.runExtensionCallback(owner.path, async () => {
+				const direct = await runner.invokeNativeTool(
+					nativeTool.name,
+					{},
+					{
+						onUpdate: () => {
+							progressIdentity = captureExtensionRequestIdentity(loaded.runtime).identity;
+						},
+					},
+				);
+				expect(captureExtensionRequestIdentity(loaded.runtime).identity).toBe(expectedIdentity);
+				const wrapped = await wrapper.execute("native-wrapper-call", {} as never, undefined, undefined, {
+					settings: Settings.isolated({ "tools.approvalMode": "yolo" }),
+				} as never);
+				expect(captureExtensionRequestIdentity(loaded.runtime).identity).toBe(expectedIdentity);
+				return [direct.details, wrapped.details];
+			});
+
+			expect(results).toEqual([undefined, undefined]);
+			expect(observed).toEqual([undefined, undefined]);
+			expect(progressIdentity).toBe(expectedIdentity);
+		});
+
+		it("clears identity through ctx.invokeTool and restores the registered extension afterward", async () => {
+			const extensionPath = path.join(extensionsDir, "native-delegation-identity.ts");
+			fs.writeFileSync(
+				extensionPath,
+				`
+export default function(pi) {
+  const { Type } = pi.typebox;
+  pi.registerTool({
+    name: "native_identity_probe",
+    label: "Native identity probe",
+    description: "Delegates once to a native tool",
+    parameters: Type.Object({}),
+    execute: async (_id, _args, _signal, _update, ctx) => {
+      const delegated = await ctx.invokeTool({});
+      await ctx.ui.confirm("After native delegation", "Continue?");
+      return { content: [], details: delegated.details };
+    },
+  });
+}
+`,
+			);
+
+			const loaded = await loadTestExtensions([extensionPath]);
+			const extension = loaded.extensions[0];
+			if (!extension) throw new Error("Expected the native delegation extension");
+			const runner = new ExtensionRunner(
+				loaded.extensions,
+				loaded.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			let identityAfterNative: string | undefined;
+			const nativeTool = {
+				name: "native_identity_probe",
+				label: "Native identity probe",
+				description: "Observe native execution scope",
+				parameters: Type.Object({}),
+				execute: async () => ({
+					content: [],
+					details: captureExtensionRequestIdentity(loaded.runtime).identity,
+				}),
+			} as AgentTool;
+			runner.setNativeToolResolver(name =>
+				name === nativeTool.name ? { tool: nativeTool, makeContext: () => ({}) as AgentToolContext } : undefined,
+			);
+			runner.initialize({} as never, {} as never, undefined, {
+				confirm: async () => {
+					identityAfterNative = captureExtensionRequestIdentity(loaded.runtime).identity;
+					return true;
+				},
+			} as never);
+
+			const registered = extension.tools.get(nativeTool.name);
+			if (!registered) throw new Error("Expected the registered extension tool");
+			const adapter = wrapRegisteredTool(registered, runner);
+			const result = await adapter.execute("native-delegation-call", {} as never);
+			const expectedIdentity = `ext:v1:sha256:${new Bun.CryptoHasher("sha256")
+				.update(fs.realpathSync(extensionPath))
+				.digest("hex")}`;
+
+			expect(result.details).toBeUndefined();
+			expect(identityAfterNative).toBe(expectedIdentity);
 		});
 	});
 });

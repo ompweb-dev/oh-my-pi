@@ -5377,6 +5377,10 @@
 						"type": "string"
 					}
 				},
+				"extensionId": {
+					"type": "string",
+					"description": "Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs."
+				},
 				"optionDetails": {
 					"type": "array",
 					"items": {
@@ -5435,6 +5439,10 @@
 				},
 				"message": {
 					"type": "string"
+				},
+				"extensionId": {
+					"type": "string",
+					"description": "Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs."
 				},
 				"timeout": {
 					"type": "integer"
