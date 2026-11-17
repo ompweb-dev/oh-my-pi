@@ -1,0 +1,162 @@
+import { type } from "@oh-my-pi/omptype";
+import type { Api, Model } from "@oh-my-pi/pi-catalog/types";
+import {
+	applyCodexResidencyHeader,
+	CODEX_DESKTOP_ORIGINATOR,
+	CODEX_DESKTOP_USER_AGENT,
+	getCodexAccountId,
+	isCodexAccessToken,
+	OPENAI_HEADERS,
+} from "@oh-my-pi/pi-catalog/wire/codex";
+import { isApiKeyResolver, resolvedApiKeyBearer, type ApiKey, type ResolvedApiKey, withAuth } from "../auth-retry";
+import * as AIError from "../error";
+import { emptyUsage } from "../images/shared";
+import { getCodexAttestationHeader } from "../providers/openai-codex-attestation";
+import { isChatGptBaseUrl, normalizeCodexBaseUrl } from "../usage/openai-codex-base-url";
+import { type TranscriptionOptions, transcriptionResponseError } from "./openai-transcriptions";
+import { TRANSCRIPTION_AUDIO_MIME_TYPES, type TranscriptionRequest, type TranscriptionResult } from "./types";
+
+const responseSchema = type({ text: "string" });
+
+/** Extensions the endpoint decodes. */
+const DECODABLE_EXTENSIONS: Readonly<Record<string, true>> = {
+	wav: true,
+	mp3: true,
+	mpeg: true,
+	mp4: true,
+	m4a: true,
+	ogg: true,
+	webm: true,
+	flac: true,
+};
+
+/** MIME spellings browsers report for containers the table names differently. */
+const MIME_ALIASES: Readonly<Record<string, string>> = {
+	"audio/aac": "audio/mp4",
+	"audio/m4a": "audio/mp4",
+	"audio/mp3": "audio/mpeg",
+	"audio/opus": "audio/ogg",
+};
+
+/** The table's first extension for `mimeType`: its canonical name for that container. */
+function containerExtension(mimeType: string | undefined): string | undefined {
+	return mimeType
+		? Object.entries(TRANSCRIPTION_AUDIO_MIME_TYPES).find(([, mime]) => mime === mimeType)?.[0]
+		: undefined;
+}
+
+/**
+ * The endpoint picks its decoder from the upload's file extension and answers `500 Error in ASR API` when the
+ * extension is missing or unknown (`voice.oga`, `audio`), even for audio it can decode. Keep a decodable name
+ * whose container agrees with the MIME type (`mp3`/`mpeg`, `m4a`/`mp4` share one MIME type); otherwise name the
+ * file after the container the MIME type declares. A generic or empty MIME type declares nothing, so a known
+ * suffix names the container instead (`voice.oga` → `audio.ogg`); with neither, the caller's name is kept.
+ */
+function uploadFileName(request: TranscriptionRequest): string {
+	const name = request.fileName?.trim() || "audio";
+	const dot = name.lastIndexOf(".");
+	const extension = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+	const rawMime = request.mimeType.split(";", 1)[0]?.trim().toLowerCase().replace("audio/x-", "audio/") ?? "";
+	const mimeType = MIME_ALIASES[rawMime] ?? rawMime;
+	const declared = containerExtension(mimeType);
+	if (
+		DECODABLE_EXTENSIONS[extension] === true &&
+		(!declared || TRANSCRIPTION_AUDIO_MIME_TYPES[extension] === mimeType)
+	) {
+		return name;
+	}
+	const extensionMime = TRANSCRIPTION_AUDIO_MIME_TYPES[extension];
+	const normalizedExtensionMime = extensionMime ? (MIME_ALIASES[extensionMime] ?? extensionMime) : undefined;
+	const container = declared ?? containerExtension(normalizedExtensionMime);
+	return container ? `audio.${container}` : name;
+}
+
+function codexCredentialError(model: Model<Api>): AIError.ConfigurationError {
+	return new AIError.ConfigurationError(
+		`${model.provider}/${model.id} only accepts a ChatGPT/Codex login; the resolved credential is not a Codex access token. Remove providers.${model.provider}.apiKey or pick another speech-to-text model`,
+	);
+}
+
+/** A Codex-shaped bearer, or a stored OAuth row whose identity was captured from the id token. */
+function acceptsCodexCredential(bearer: string, resolved: ResolvedApiKey | undefined): boolean {
+	return isCodexAccessToken(bearer) || resolved?.oauthAccess !== undefined;
+}
+
+function requireCodexCredential(model: Model<Api>, apiKey: ApiKey): ApiKey {
+	if (!isApiKeyResolver(apiKey)) {
+		if (!acceptsCodexCredential(apiKey, undefined)) throw codexCredentialError(model);
+		return apiKey;
+	}
+	return async ctx => {
+		const resolved = await apiKey(ctx);
+		const bearer = resolvedApiKeyBearer(resolved);
+		if (bearer === undefined) return resolved;
+		if (!acceptsCodexCredential(bearer, typeof resolved === "object" ? resolved : undefined)) {
+			throw codexCredentialError(model);
+		}
+		return resolved;
+	};
+}
+
+/**
+ * Transcribe through the ChatGPT backend dictation endpoint (`POST /transcribe`) with a Codex OAuth bearer.
+ *
+ * The endpoint takes only `file` and `language` and reports no usage or segments, so prompt, temperature,
+ * response format and timestamp options are not forwarded and the result carries text with zero usage.
+ *
+ * A `baseUrl` off the ChatGPT origin is refused. A static or config-resolved credential that is not a Codex
+ * access token is refused even on that origin: `providers.openai-codex.api` can keep the STT row on
+ * chatgpt.com while the provider-wide `apiKey` is still a relay secret. A stored OAuth credential is accepted
+ * from its resolver provenance, because its workspace identity may live only on the id token.
+ */
+export async function transcribeOpenAICodex(
+	model: Model<Api>,
+	request: TranscriptionRequest,
+	options: TranscriptionOptions,
+): Promise<TranscriptionResult> {
+	if (model.baseUrl?.trim() && !isChatGptBaseUrl(model.baseUrl)) {
+		throw new AIError.ConfigurationError(
+			`${model.provider}/${model.id} only runs on chatgpt.com, but its base URL is ${model.baseUrl}; remove the providers.${model.provider}.baseUrl override or pick another speech-to-text model`,
+		);
+	}
+	const form = new FormData();
+	form.append("file", new File([request.audio], uploadFileName(request), { type: request.mimeType }));
+	if (request.language !== undefined) form.append("language", request.language);
+
+	const fetchImpl = options.fetch ?? fetch;
+	const response = await withAuth(
+		requireCodexCredential(model, options.apiKey),
+		async key => {
+			const headers: Record<string, string> = {
+				Authorization: `Bearer ${key}`,
+				Accept: "application/json",
+				"User-Agent": CODEX_DESKTOP_USER_AGENT,
+				[OPENAI_HEADERS.ORIGINATOR]: CODEX_DESKTOP_ORIGINATOR,
+			};
+			const accountId = getCodexAccountId(key);
+			if (accountId) headers[OPENAI_HEADERS.ACCOUNT_ID] = accountId;
+			const attestation = await getCodexAttestationHeader(accountId);
+			if (attestation) headers[OPENAI_HEADERS.ATTESTATION] = attestation;
+			// The backend 401s a region-pinned workspace unless the request declares its residency.
+			applyCodexResidencyHeader(headers, key);
+			const attempt = await fetchImpl(`${normalizeCodexBaseUrl(model.baseUrl)}/transcribe`, {
+				method: "POST",
+				headers,
+				body: form,
+				signal: options.signal,
+			});
+			if (!attempt.ok) throw await transcriptionResponseError(attempt, model);
+			return attempt;
+		},
+		{ signal: options.signal },
+	);
+
+	const parsed = responseSchema(await response.json());
+	if (parsed instanceof type.errors) {
+		throw new AIError.ProviderResponseError(
+			`${model.provider}/${model.id} transcription response is malformed: ${parsed.summary}`,
+			{ provider: model.provider, kind: "envelope" },
+		);
+	}
+	return { text: parsed.text, usage: emptyUsage() };
+}

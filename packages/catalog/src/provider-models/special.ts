@@ -56,9 +56,7 @@ export interface OpenAICodexModelManagerConfig {
 	fetch?: FetchImpl;
 }
 
-export function openaiCodexModelManagerOptions(
-	config: OpenAICodexModelManagerConfig = {},
-): ModelManagerOptions<"openai-codex-responses"> {
+export function openaiCodexModelManagerOptions(config: OpenAICodexModelManagerConfig = {}): ModelManagerOptions<Api> {
 	const { resolveAccounts, baseUrl, clientVersion, fetch } = config;
 	return {
 		providerId: "openai-codex",
@@ -82,7 +80,7 @@ export function openaiCodexModelManagerOptions(
 								}),
 							})),
 						);
-						return unionCodexModels(results);
+						return withAuthoredSeeds(unionCodexModels(results));
 					},
 				}
 			: undefined),
@@ -115,6 +113,16 @@ function unionCodexModels(
 		catalogs.push(result.models);
 	}
 	return catalogs.length > 0 ? unionAccountCatalogs(catalogs) : null;
+}
+
+/** Keep authored local labels in non-empty discovery; empty stays empty so ModelManager uses its short retry. */
+function withAuthoredSeeds(
+	discovered: readonly ModelSpec<"openai-codex-responses">[] | null,
+): readonly ModelSpec<Api>[] | null {
+	if (!discovered || discovered.length === 0) return discovered;
+	const known = new Set(discovered.map(model => model.id));
+	const missing = seedModels("openai-codex").filter(seed => !known.has(seed.id));
+	return missing.length === 0 ? discovered : [...discovered, ...missing.map(seed => ({ ...seed }))];
 }
 
 // ---------------------------------------------------------------------------
