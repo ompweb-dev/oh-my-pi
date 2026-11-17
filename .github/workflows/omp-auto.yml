@@ -458,7 +458,7 @@ jobs:
               log=""
               for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --paginate \
                 --jq '.jobs[] | select(.conclusion == "failure") | .id'); do
-                log+="$(gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$id/logs" | tail -n 150)"$'\n'
+                log+="$(gh api --allow-escape-sequences "repos/$GITHUB_REPOSITORY/actions/jobs/$id/logs" | tail -n 150)"$'\n'
               done
               jq -n --arg tag "$INTEGRATION_BASE" --arg log "$log" '{step: "build", tag: $tag, log: $log}' > "$RUNNER_TEMP/failure.json"
          - uses: ./ci/.github/actions/omp-agent
