@@ -15,6 +15,7 @@
 - Added the Codex Dictation speech-to-text model: select `openai-codex/codex-transcribe` as the dictation model to transcribe voice input with your ChatGPT/Codex subscription login ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
 - Added `memory.backend: mnemosyne-oss`, which runs your own Mnemosyne 4.x Python SDK so recall, retain, and `memory://<id>` reads use the same local SQLite banks as other Mnemosyne clients ([#15687](https://github.com/can1357/oh-my-pi/pull/15687) by [@andrebrait](https://github.com/andrebrait), based on [#9211](https://github.com/can1357/oh-my-pi/pull/9211) by [@wannfq](https://github.com/wannfq))
 - The task tool can take an exact per-spawn thinking level with `actualEffort` (`minimal`…`max`), enabled by `task.enableActualEffort` and capped by the new `task.maxActualEffort`; it takes `effort`'s precedence one step above it, replacing `effort` entirely ([#18780](https://github.com/can1357/oh-my-pi/pull/18780) by [@andrebrait](https://github.com/andrebrait))
+- SDK embedders can run a fully started session in their own host: pass `runSessionHost` to `runRootCommand` and the launch keeps the normal startup (settings, auth, `--resume`/`--model`/`--tools`, extensions, MCP) with `--mode rpc-ui`'s protocol-host behavior, then hands over the session and its tool-UI setter instead of starting the TUI, print or RPC mode ([#19075](https://github.com/can1357/oh-my-pi/pull/19075) by [@andrebrait](https://github.com/andrebrait))
 
 ### Changed
 
