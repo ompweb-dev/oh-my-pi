@@ -527,22 +527,28 @@ function orderedByTimestamp(a: SessionTreeNode, b: SessionTreeNode): number {
 }
 
 /**
- * The most recent model role on `branch`, or undefined when no model change
- * was recorded. `skipEphemeral` passes over temporary switches (retry fallback
+ * The most recent model role on `branch`, or undefined when no model change was
+ * recorded. `skipEphemeral` passes over temporary switches (retry fallback
  * hops, prewalk, context promotion), returning the role last assigned.
+ * `preserveMissingRole` keeps a role-less model-change entry distinct from `default`.
  */
 export function lastModelChangeRole(
 	branch: readonly SessionEntry[],
-	options?: { skipEphemeral?: boolean },
+	options?: { skipEphemeral?: boolean; preserveMissingRole?: boolean },
 ): string | undefined {
 	for (let index = branch.length - 1; index >= 0; index--) {
 		const entry = branch[index];
 		if (entry.type !== "model_change") continue;
-		const role = entry.role ?? "default";
-		if (options?.skipEphemeral && (role === EPHEMERAL_MODEL_CHANGE_ROLE || role === PREWALK_MODEL_CHANGE_ROLE)) {
+		const role = entry.role;
+		if (role === undefined && options?.preserveMissingRole) return undefined;
+		const effectiveRole = role ?? "default";
+		if (
+			options?.skipEphemeral &&
+			(effectiveRole === EPHEMERAL_MODEL_CHANGE_ROLE || effectiveRole === PREWALK_MODEL_CHANGE_ROLE)
+		) {
 			continue;
 		}
-		return role;
+		return effectiveRole;
 	}
 	return undefined;
 }
@@ -3904,7 +3910,7 @@ export class SessionManager {
 	 * switches (retry fallback hops, prewalk, context promotion), returning the
 	 * role the session was last assigned.
 	 */
-	getLastModelChangeRole(options?: { skipEphemeral?: boolean }): string | undefined {
+	getLastModelChangeRole(options?: { skipEphemeral?: boolean; preserveMissingRole?: boolean }): string | undefined {
 		return lastModelChangeRole(this.#index.branchView(), options);
 	}
 
