@@ -197,6 +197,23 @@
         "arktype": "2.2.3",
       },
     },
+    "packages/ompweb-runner": {
+      "name": "@oh-my-pi/ompweb-runner",
+      "version": "18.22.0",
+      "dependencies": {
+        "@oh-my-pi/pi-agent-core": "catalog:",
+        "@oh-my-pi/pi-ai": "catalog:",
+        "@oh-my-pi/pi-catalog": "catalog:",
+        "@oh-my-pi/pi-coding-agent": "catalog:",
+        "@oh-my-pi/pi-natives": "catalog:",
+        "@oh-my-pi/pi-tui": "catalog:",
+        "@oh-my-pi/pi-utils": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/snapcompact": {
       "name": "@oh-my-pi/snapcompact",
       "version": "18.22.0",
@@ -615,6 +632,8 @@
     "@oh-my-pi/omp-stats": ["@oh-my-pi/omp-stats@workspace:packages/stats"],
 
     "@oh-my-pi/omptype": ["@oh-my-pi/omptype@workspace:packages/omptype"],
+
+    "@oh-my-pi/ompweb-runner": ["@oh-my-pi/ompweb-runner@workspace:packages/ompweb-runner"],
 
     "@oh-my-pi/pi-agent-core": ["@oh-my-pi/pi-agent-core@workspace:packages/agent"],
 

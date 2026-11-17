@@ -1,0 +1,22 @@
+{
+	"name": "@oh-my-pi/ompweb-runner",
+	"private": true,
+	"version": "18.22.0",
+	"type": "module",
+	"scripts": {
+		"check:types": "tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@oh-my-pi/pi-agent-core": "catalog:",
+		"@oh-my-pi/pi-ai": "catalog:",
+		"@oh-my-pi/pi-catalog": "catalog:",
+		"@oh-my-pi/pi-coding-agent": "catalog:",
+		"@oh-my-pi/pi-natives": "catalog:",
+		"@oh-my-pi/pi-tui": "catalog:",
+		"@oh-my-pi/pi-utils": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

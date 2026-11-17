@@ -29,25 +29,3 @@ fork_push() {
 	for a; do if [[ "$a" == -* ]]; then opts+=("$a"); else refs+=("$a"); fi; done
 	git push "${opts[@]}" "https://x-access-token:$GH_TOKEN@github.com/${FORK:?}.git" "${refs[@]}"
 }
-
-# dispatch_ompweb <tag>: repository_dispatch omp-build to ompweb-dev/ompweb.
-# GITHUB_TOKEN cannot write to another repo. Prefer OMPWEB_DISPATCH_TOKEN
-# (contents write there); else FALLBACK_TOKEN (OMP_FORK_TOKEN).
-dispatch_ompweb() {
-	local tag="${1:?}" payload
-	payload="$(jq -nc --arg tag "$tag" '{tag:$tag}')"
-	if [ -n "${OMPWEB_DISPATCH_TOKEN:-}" ]; then
-		GH_TOKEN="$OMPWEB_DISPATCH_TOKEN" gh api -X POST repos/ompweb-dev/ompweb/dispatches \
-			-f event_type=omp-build -f "client_payload=$payload" >/dev/null
-		echo "dispatch: token=ompweb" >&2
-		return 0
-	fi
-	if [ -n "${FALLBACK_TOKEN:-}" ]; then
-		GH_TOKEN="$FALLBACK_TOKEN" gh api -X POST repos/ompweb-dev/ompweb/dispatches \
-			-f event_type=omp-build -f "client_payload=$payload" >/dev/null
-		echo "dispatch: token=fallback" >&2
-		return 0
-	fi
-	echo "dispatch: set OMPWEB_DISPATCH_TOKEN (contents write on ompweb-dev/ompweb)" >&2
-	return 1
-}
