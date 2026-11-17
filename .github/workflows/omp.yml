@@ -1,0 +1,544 @@
+name: omp oml build
+
+# Push to oml (an upstream merge, or a patch committed on oml) builds and tests
+# that commit. On green, `release` publishes v<version>-int.<stamp>.g<sha7> with
+# omp-packages-<version>.zip and dispatches omp-build to ompweb-dev/ompweb.
+# A red build opens an issue and publishes nothing. No repair agent.
+#
+# This workflow is push-triggered. The sync schedule in omp-sync.yml runs only
+# once oml is the repository default branch.
+#
+# Every binary, native addon and npm package carries
+# <upstream>-int.<YYYYMMDDHHMM>.g<sha7>, the stamp being the commit's committer
+# time in UTC. `build` runs BUILD_CMD/TEST_CMD from .github/omp-build.sh.
+# integration-release is frozen; this workflow does not move it.
+on:
+   push:
+      branches: [oml]
+   workflow_dispatch:
+
+run-name: build ${{ github.sha }}
+
+# Build jobs run the commit's code, so they get a read-only token that is not
+# persisted into the checkouts. Only `release` writes. Cache saves use the
+# runner's own cache token, not GITHUB_TOKEN.
+permissions: {}
+
+env:
+   UPSTREAM: can1357/oh-my-pi
+
+jobs:
+   # Runs no fork code: a blobless, sparse clone at the commit for its date and version.
+   version:
+      runs-on: ubuntu-24.04
+      timeout-minutes: 5
+      permissions:
+         contents: read
+      outputs:
+         stamp: ${{ steps.version.outputs.stamp }}
+         version: ${{ steps.version.outputs.version }}
+         tag: ${{ steps.version.outputs.tag }}
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+              filter: blob:none
+              sparse-checkout: packages/utils/package.json
+              sparse-checkout-cone-mode: false
+         - id: version
+           shell: bash
+           env:
+              SHA: ${{ github.sha }}
+           run: |
+              set -euo pipefail
+              stamp="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M "$SHA")"
+              version="$(jq -r .version packages/utils/package.json)"   # upstream version, unstamped
+              rel="v$version-int.$stamp.g${SHA:0:7}"
+              { echo "stamp=$stamp"; echo "version=${rel#v}"; echo "tag=$rel"; } >> "$GITHUB_OUTPUT"
+              echo "Version: ${rel#v}" >> "$GITHUB_STEP_SUMMARY"
+
+   build:
+      runs-on: ubuntu-24.04
+      timeout-minutes: 90
+      permissions:
+         contents: read
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+         - uses: ./.github/actions/bun-install
+         # Bazel disk cache: see the natives job.
+         - id: disk
+           uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+           with:
+              path: ~/.cache/omp-bazel-disk
+              key: bazel-disk-v1-build-${{ hashFiles('Cargo.lock', 'MODULE.bazel.lock') }}
+              restore-keys: bazel-disk-v1-build-
+         - id: bazel
+           uses: ./.github/actions/bazel-cache
+         - name: Use the bazel disk cache
+           shell: bash
+           env:
+              RC: ${{ steps.bazel.outputs.rc }}
+           run: |
+              echo "common --disk_cache=$HOME/.cache/omp-bazel-disk" >> "$RC"
+              touch "$RUNNER_TEMP/bazel-start"
+         - name: Build and test
+           shell: bash
+           env:
+              OMP_BAZEL_RC: ${{ steps.bazel.outputs.rc }}
+              # The host build defaults to cargo.
+              OMP_NATIVE_BUILD_BACKEND: bazel
+           run: |
+              set -euo pipefail
+              # Same file-descriptor floor upstream's bazel steps set.
+              if [ "$(ulimit -Sn)" != unlimited ] && [ "$(ulimit -Sn)" -lt 65536 ]; then ulimit -Sn 65536 || true; fi
+              source .github/omp-build.sh
+              eval "$BUILD_CMD"
+              eval "$TEST_CMD"
+         - name: Prune unused bazel disk cache entries
+           if: success() && steps.disk.outputs.cache-hit != 'true'
+           shell: bash
+           run: |
+              find ~/.cache/omp-bazel-disk -type f ! -newer "$RUNNER_TEMP/bazel-start" -delete
+              du -sh ~/.cache/omp-bazel-disk
+         - if: success() && steps.disk.outputs.cache-hit != 'true'
+           uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+           with:
+              path: ~/.cache/omp-bazel-disk
+              key: ${{ steps.disk.outputs.cache-primary-key }}
+
+   # Every addon target, macOS included: upstream cross-compiles them all on Linux
+   # (hermetic darwin and msvc toolchains in the fork's bazel config). One job per
+   # target: all seven on one runner overrun two hours uncached.
+   #
+   # Each bazel job keeps a disk cache keyed by the lockfiles: a run on a cached
+   # lockfile recompiles only pi_natives and saves nothing. A lockfile change starts
+   # from the previous cache and, when green, saves a new one pruned to the entries
+   # this run used (bazel refreshes an entry's mtime on every hit), so old
+   # dependencies never accumulate. Only green runs save, so a failing PR build
+   # never seeds the cache.
+   natives:
+      strategy:
+         fail-fast: false
+         matrix:
+            target:
+               - linux-x64-baseline
+               - linux-x64-modern
+               - linux-arm64
+               - win32-x64-baseline
+               - win32-arm64
+               - darwin-x64-baseline
+               - darwin-arm64
+      runs-on: ubuntu-24.04
+      timeout-minutes: 120
+      permissions:
+         contents: read
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+         - uses: ./.github/actions/bun-install
+         - id: disk
+           uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+           with:
+              path: ~/.cache/omp-bazel-disk
+              key: bazel-disk-v1-${{ matrix.target }}-${{ hashFiles('Cargo.lock', 'MODULE.bazel.lock') }}
+              restore-keys: bazel-disk-v1-${{ matrix.target }}-
+         - id: bazel
+           uses: ./.github/actions/bazel-cache
+         - name: Use the bazel disk cache
+           shell: bash
+           env:
+              RC: ${{ steps.bazel.outputs.rc }}
+           run: |
+              echo "common --disk_cache=$HOME/.cache/omp-bazel-disk" >> "$RC"
+              touch "$RUNNER_TEMP/bazel-start"
+         - name: Prefetch the pinned Apple SDK with curl
+           if: startsWith(matrix.target, 'darwin-')
+           shell: bash
+           env:
+              RC: ${{ steps.bazel.outputs.rc }}
+           run: |
+              # swcdn.apple.com answers GitHub runners with HTTP 403, so the SHA256-pinned
+              # package is fetched from this repo's `apple-sdk` release (<sha256>.pkg) first;
+              # Apple stays the fallback. Either way the hash is checked before Bazel
+              # sees the file, and --distdir keeps Bazel's own SHA256 check.
+              python3 - <<'PY'
+              import ast
+              import hashlib
+              import os
+              from pathlib import Path
+              import re
+              import subprocess
+              from urllib.parse import urlsplit
+
+              source = Path("bazel/toolchains/darwin/sdk.bzl").read_text()
+              pins = {
+                  name: ast.literal_eval(re.search(rf"^{name} = (.+)$", source, re.MULTILINE).group(1))
+                  for name in ("_URL", "_SHA256")
+              }
+              distdir = Path(os.environ["RUNNER_TEMP"]) / "apple-sdk-dist"
+              distdir.mkdir()
+              package = distdir / Path(urlsplit(pins["_URL"]).path).name
+              name = f"{pins['_SHA256']}.pkg"
+              mirror = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/apple-sdk/{name}"
+              for url in (mirror, pins["_URL"]):
+                  if subprocess.run(["curl", "--fail", "--location", "--retry", "3",
+                                     "--output", str(package), url]).returncode == 0:
+                      break
+              else:
+                  raise SystemExit(f"Apple SDK unavailable: seed the apple-sdk release with {name}")
+              with package.open("rb") as downloaded:
+                  digest = hashlib.file_digest(downloaded, "sha256").hexdigest()
+              assert digest == pins["_SHA256"], f"Apple SDK SHA256 mismatch: {digest}"
+              with open(os.environ["RC"], "a") as rc:
+                  rc.write(f"common --distdir={distdir}\n")
+              PY
+         - name: Build native addons
+           shell: bash
+           env:
+              OMP_BAZEL_RC: ${{ steps.bazel.outputs.rc }}
+              SHA: ${{ github.sha }}
+           run: |
+              set -euo pipefail
+              if [ "$(ulimit -Sn)" != unlimited ] && [ "$(ulimit -Sn)" -lt 65536 ]; then ulimit -Sn 65536 || true; fi
+              # bazel-natives.ts stamps this version into each addon after linking; the
+              # loader keys its extracted-addon cache by it (see the header).
+              stamp="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M "$SHA")"
+              jq --arg s "$stamp.g${SHA:0:7}" '.version += "-int." + $s' packages/natives/package.json > "$RUNNER_TEMP/natives.json"
+              mv "$RUNNER_TEMP/natives.json" packages/natives/package.json
+              bun scripts/bazel-natives.ts "${{ matrix.target }}" --dest packages/natives/native
+         - name: Prune unused bazel disk cache entries
+           if: success() && steps.disk.outputs.cache-hit != 'true'
+           shell: bash
+           run: |
+              find ~/.cache/omp-bazel-disk -type f ! -newer "$RUNNER_TEMP/bazel-start" -delete
+              du -sh ~/.cache/omp-bazel-disk
+         - if: success() && steps.disk.outputs.cache-hit != 'true'
+           uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+           with:
+              path: ~/.cache/omp-bazel-disk
+              key: ${{ steps.disk.outputs.cache-primary-key }}
+         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           with:
+              name: natives-${{ matrix.target }}
+              path: packages/natives/native/*.node
+              retention-days: 1
+              if-no-files-found: error
+
+   binaries:
+      needs: natives
+      strategy:
+         fail-fast: false
+         matrix:
+            include:
+               - { target: linux-x64, file: omp-linux-x64, out: omp }
+               - { target: linux-arm64, file: omp-linux-arm64, out: omp }
+               - { target: darwin-x64, file: omp-darwin-x64, out: omp }
+               - { target: darwin-arm64, file: omp-darwin-arm64, out: omp }
+               - { target: win32-x64, file: omp-windows-x64.exe, out: omp.exe }
+               - { target: win32-arm64, file: omp-windows-arm64.exe, out: omp.exe }
+      runs-on: ubuntu-24.04
+      timeout-minutes: 30
+      permissions:
+         contents: read
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+         - uses: ./.github/actions/bun-install
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              pattern: natives-*
+              merge-multiple: true
+              path: packages/natives/native
+         - name: Build release binary
+           shell: bash
+           env:
+              RELEASE_TARGETS: ${{ matrix.target }}
+              SHA: ${{ github.sha }}
+           run: |
+              set -euo pipefail
+              stamp="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M "$SHA")"
+              jq --arg s "$stamp.g${SHA:0:7}" '.version += "-int." + $s' packages/utils/package.json > "$RUNNER_TEMP/utils.json"
+              mv "$RUNNER_TEMP/utils.json" packages/utils/package.json
+              jq --arg s "$stamp.g${SHA:0:7}" '.version += "-int." + $s' packages/natives/package.json > "$RUNNER_TEMP/natives.json"
+              mv "$RUNNER_TEMP/natives.json" packages/natives/package.json
+              bun run ci:release:build-binaries
+              # No Apple credentials here, so the script signs ad hoc (still runnable).
+              if [[ "$RELEASE_TARGETS" == darwin-* ]]; then
+                bash scripts/ci-macos-sign.sh "packages/coding-agent/binaries/${{ matrix.file }}"
+              fi
+              mkdir -p "$RUNNER_TEMP/out"
+              mv "packages/coding-agent/binaries/${{ matrix.file }}" "$RUNNER_TEMP/out/${{ matrix.out }}"
+         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           with:
+              name: omp-${{ matrix.target }}
+              path: ${{ runner.temp }}/out/${{ matrix.out }}
+              retention-days: 7
+              if-no-files-found: error
+
+   # Each cross-compiled binary runs on its own platform before it is published.
+   smoke:
+      needs: [version, binaries]
+      strategy:
+         fail-fast: false
+         matrix:
+            include:
+               - { target: linux-x64, os: ubuntu-24.04 }
+               - { target: linux-arm64, os: ubuntu-24.04-arm }
+               - { target: darwin-x64, os: macos-15-intel }
+               - { target: darwin-arm64, os: macos-15 }
+               - { target: win32-x64, os: windows-2025 }
+               - { target: win32-arm64, os: windows-11-arm }
+      runs-on: ${{ matrix.os }}
+      timeout-minutes: 15
+      permissions: {}
+      steps:
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              name: omp-${{ matrix.target }}
+              path: bin
+         - name: Smoke release binary
+           if: runner.os != 'Windows'
+           shell: bash
+           env:
+              VERSION: ${{ needs.version.outputs.version }}
+           run: |
+              set -euo pipefail
+              chmod +x bin/omp
+              if [ "$RUNNER_OS" = macOS ]; then codesign --verify --strict --verbose=2 bin/omp; fi
+              runtime_dir="$(mktemp -d)"
+              # Each binary must report its release tag's version.
+              got="$(HOME="$runtime_dir/home" XDG_DATA_HOME="$runtime_dir/xdg" bin/omp --version)"
+              [ "$got" = "omp/$VERSION" ] || { echo "bin/omp --version printed '$got', want 'omp/$VERSION'" >&2; exit 1; }
+              HOME="$runtime_dir/home" XDG_DATA_HOME="$runtime_dir/xdg" bin/omp --smoke-test
+         - name: Smoke release binary (Windows)
+           if: runner.os == 'Windows'
+           shell: pwsh
+           env:
+              VERSION: ${{ needs.version.outputs.version }}
+           run: |
+              $runtimeDir = Join-Path $env:RUNNER_TEMP "omp-smoke"
+              $env:HOME = Join-Path $runtimeDir "home"
+              $env:USERPROFILE = $env:HOME
+              $env:LOCALAPPDATA = Join-Path $runtimeDir "local"
+              $env:XDG_DATA_HOME = Join-Path $runtimeDir "xdg"
+              New-Item -ItemType Directory -Force -Path $env:HOME, $env:LOCALAPPDATA, $env:XDG_DATA_HOME | Out-Null
+              $got = (& "bin/omp.exe" --version | Out-String).Trim()
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              if ($got -ne "omp/$env:VERSION") { Write-Error "bin/omp.exe --version printed '$got', want 'omp/$env:VERSION'"; exit 1 }
+              & "bin/omp.exe" --smoke-test
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+   # GitHub sometimes never acquires a macOS arm64 runner for the darwin-arm64 smoke.
+   # The build then publishes without it and its notes say so; any other smoke that
+   # did not succeed, or a darwin-arm64 smoke that ran and failed, still blocks.
+   smoke-gate:
+      needs: smoke
+      if: ${{ !cancelled() && needs.smoke.result != 'skipped' }}
+      runs-on: ubuntu-24.04
+      timeout-minutes: 5
+      permissions:
+         contents: read
+         actions: read
+      outputs:
+         unsmoked: ${{ steps.gate.outputs.unsmoked }}
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+              sparse-checkout: .github/scripts/smoke-gate.sh
+              sparse-checkout-cone-mode: false
+         - id: gate
+           shell: bash
+           env:
+              GH_TOKEN: ${{ github.token }}
+           run: |
+              set -euo pipefail
+              # Matrix jobs are named `smoke (...)`.
+              out="$(.github/scripts/smoke-gate.sh '(^|/ )smoke \(')"
+              echo "$out" >> "$GITHUB_OUTPUT"
+              grep -qx ok=true <<< "$out"
+
+   # The npm packages of this build, as upstream's release publishes them, kept instead
+   # of published: 12 JS packages and the 6 native leaves, zipped with an index.json
+   # ({ "<npm name>": "<file>.tgz" }) for ompweb's runner.
+   pack:
+      needs: [version, natives]
+      runs-on: ubuntu-24.04
+      timeout-minutes: 30
+      permissions:
+         contents: read
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+         - uses: ./.github/actions/bun-install
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              pattern: natives-*
+              merge-multiple: true
+              path: packages/natives/native
+         - name: Pack the npm packages
+           shell: bash
+           env:
+              SHA: ${{ github.sha }}
+              VERSION: ${{ needs.version.outputs.version }}
+           run: |
+              set -euo pipefail
+              stamp="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M "$SHA")"
+              jq --arg s "$stamp.g${SHA:0:7}" '.version += "-int." + $s' packages/utils/package.json > "$RUNNER_TEMP/utils.json"
+              mv "$RUNNER_TEMP/utils.json" packages/utils/package.json
+              jq --arg s "$stamp.g${SHA:0:7}" '.version += "-int." + $s' packages/natives/package.json > "$RUNNER_TEMP/natives.json"
+              mv "$RUNNER_TEMP/natives.json" packages/natives/package.json
+              [ "$(jq -r .version packages/natives/package.json)" = "$VERSION" ]
+              # Upstream's publisher rejects prereleases other than -canary when choosing an npm
+              # shellcheck disable=SC2016
+              perl -0pi -e 's/(function npmDistTag\(version: string\): string \{\n)/$1\tif (version.includes("-int.")) return "int";\n/' scripts/ci-release-publish.ts
+              grep -qF 'return "int";' scripts/ci-release-publish.ts
+              export OMP_PACK_OUT="$RUNNER_TEMP/packages"
+              mkdir -p "$OMP_PACK_OUT"
+              export PATH="$GITHUB_WORKSPACE/.github/scripts/fake-npm:$PATH"
+              bun scripts/ci-release-publish.ts
+              for leaf in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+                bun scripts/ci-release-publish.ts --native-leaf "$leaf"
+              done
+              cd "$OMP_PACK_OUT"
+              n="$(find . -maxdepth 1 -name '*.tgz' | wc -l)"
+              [ "$n" = 18 ] || { echo "pack: $n tarballs, want 18" >&2; ls >&2; exit 1; }
+              for f in *.tgz; do
+                jq -n --arg name "$(tar -xOzf "$f" package/package.json | jq -r .name)" --arg file "$f" '{($name): $file}'
+              done | jq -s 'add' > index.json
+              [ "$(jq length index.json)" = 18 ]
+              mkdir -p "$RUNNER_TEMP/zip"
+              zip -q "$RUNNER_TEMP/zip/omp-packages-$VERSION.zip" ./*.tgz index.json
+         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           with:
+              name: omp-packages
+              path: ${{ runner.temp }}/zip/omp-packages-*.zip
+              retention-days: 7
+              if-no-files-found: error
+
+
+   # Runs no fork code: attaches the built binaries and npm packages to a release
+   # on the fork. Does not move integration-release (frozen) or oml (the push
+   # already updated it). Then dispatches omp-build to ompweb-dev/ompweb.
+   release:
+      needs: [version, build, pack, smoke-gate]
+      if: ${{ !cancelled() && needs.build.result == 'success' && needs.pack.result == 'success' && needs.smoke-gate.result == 'success' }}
+      runs-on: ubuntu-24.04
+      environment: fork-build
+      timeout-minutes: 30
+      permissions:
+         contents: write
+      outputs:
+         tag: ${{ steps.release.outputs.tag }}
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+              sparse-checkout: .github/scripts/fork-token.sh
+              sparse-checkout-cone-mode: false
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              pattern: omp-*
+              path: bin
+         - id: release
+           shell: bash
+           env:
+              GH_TOKEN: ${{ github.token }}
+              TOKEN: ${{ github.token }}
+              FALLBACK_TOKEN: ${{ secrets.OMP_FORK_TOKEN }}
+              OMPWEB_DISPATCH_TOKEN: ${{ secrets.OMPWEB_DISPATCH_TOKEN }}
+              FORK: ${{ github.repository }}
+              UPSTREAM: can1357/oh-my-pi
+              SHA: ${{ github.sha }}
+              REL: ${{ needs.version.outputs.tag }}
+              VERSION: ${{ needs.version.outputs.version }}
+              UNSMOKED: ${{ needs.smoke-gate.outputs.unsmoked }}
+           run: |
+              set -euo pipefail
+              . .github/scripts/fork-token.sh
+              # v<upstream>-int.<YYYYMMDDHHMM>.g<sha7>, as the version job computed it.
+              [[ "$REL" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-int\.[0-9]{12}\.g[0-9a-f]{7}$ ]] ||
+                { echo "release: refusing tag '$REL'" >&2; exit 1; }
+              [ "${REL##*.g}" = "${SHA:0:7}" ] || { echo "release: $REL is not $SHA" >&2; exit 1; }
+              tags="$(gh release list -R "$FORK" --limit 100 --json tagName --jq '.[].tagName')"
+              if grep -qE "^v[0-9]+\.[0-9]+\.[0-9]+-int\.[0-9]{12}\.g${SHA:0:7}$" <<< "$tags"; then
+                echo "$FORK already has a release for ${SHA:0:7}; not releasing it again."
+              else
+                mkdir -p out
+                for pair in linux-x64:omp-linux-x64 linux-arm64:omp-linux-arm64 darwin-x64:omp-darwin-x64 \
+                  darwin-arm64:omp-darwin-arm64 win32-x64:omp-windows-x64.exe win32-arm64:omp-windows-arm64.exe; do
+                  src="bin/omp-${pair%%:*}"
+                  cp "$src/$(ls "$src")" "out/${pair#*:}"
+                done
+                cp "bin/omp-packages/omp-packages-$VERSION.zip" out/
+                (cd out && sha256sum -- * > SHA256SUMS.txt)
+                {
+                  gh release view "${REL%%-int.*}" -R "$UPSTREAM" --json body --jq .body || true
+                  printf '\nBuilt from oml %s.\n' "$SHA"
+                  [ "$UNSMOKED" != true ] || printf '\n## Note\n\ndarwin-arm64 smoke not run (no runner)\n'
+                } > notes.md
+                fork_write gh release create "$REL" -R "$FORK" --target "$SHA" --title "$REL" --notes-file notes.md --latest out/*
+              fi
+              # integration-release stays where it is.
+              dispatch_ompweb "$REL"
+              echo "Released $REL" >> "$GITHUB_STEP_SUMMARY"
+              echo "tag=$REL" >> "$GITHUB_OUTPUT"
+              if pin="$(gh api repos/ompweb-dev/ompweb/contents/runner/omp-build.json -H 'Accept: application/vnd.github.raw' 2>"$RUNNER_TEMP/pin.err")"; then
+                pin="$(jq -r --arg fork "$FORK" 'select(.repo == $fork) | .tag // empty' <<< "$pin")"
+              elif grep -q 'HTTP 404' "$RUNNER_TEMP/pin.err"; then
+                pin=""
+              else
+                cat "$RUNNER_TEMP/pin.err" >&2
+                echo "::warning::could not read ompweb's pinned omp build; not pruning releases"
+                exit 0
+              fi
+              gh release list -R "$FORK" --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName' |
+                grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-int\.[0-9]{12}\.g[0-9a-f]{7}$' | tail -n +11 | while read -r old; do
+                  [ "$old" != "$pin" ] || { echo "Keeping $old: ompweb pins it"; continue; }
+                  fork_write gh release delete "$old" -R "$FORK" --cleanup-tag --yes
+                done
+
+   fail:
+      needs: [build, pack, smoke-gate, release]
+      if: ${{ !cancelled() && (needs.build.result == 'failure' || needs.pack.result == 'failure' || needs.smoke-gate.result == 'failure' || needs.release.result == 'failure') }}
+      runs-on: ubuntu-24.04
+      timeout-minutes: 10
+      permissions:
+         issues: write
+      steps:
+         - env:
+              GH_TOKEN: ${{ github.token }}
+              SHA: ${{ github.sha }}
+              RESULTS: ${{ toJSON(needs) }}
+           run: |
+              set -euo pipefail
+              title="omp build failed for ${SHA:0:7}"
+              {
+                echo "Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+                echo
+                echo "Commit: https://github.com/$GITHUB_REPOSITORY/commit/$SHA"
+                echo
+                echo "Jobs: $(jq -r 'to_entries | map("\(.key)=\(.value.result)") | join(" ")' <<< "$RESULTS")"
+                echo
+                echo "No release was published for this commit."
+              } > body.md
+              gh label create omp-auto -R "$GITHUB_REPOSITORY" --color B60205 --description "omp oml sync and build failures" --force >/dev/null
+              n="$(gh issue list -R "$GITHUB_REPOSITORY" --label omp-auto --state open --json number,title \
+                --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+              if [ -n "$n" ]; then
+                gh issue comment "$n" -R "$GITHUB_REPOSITORY" --body-file body.md
+              else
+                gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --label omp-auto --body-file body.md
+              fi

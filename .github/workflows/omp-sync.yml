@@ -1,0 +1,293 @@
+name: omp upstream sync
+
+# If the latest upstream release tag is not in oml, merge it --no-ff and push.
+# A conflict, or a generated-file/fmt change after the merge, goes to the repair
+# agent. If the agent cannot finish, an issue is opened. No other AI.
+#
+# Foreign .github/workflows/* stay deleted (modify/delete resolves to deleted,
+# and a workflow the release adds is removed in the merge commit). Only
+# omp-sync.yml and omp.yml run here.
+#
+# Schedule runs only once oml is the repository default branch. A patch is a
+# normal commit on oml; closing an upstream PR does not remove it (revert on oml).
+# integration-release is frozen.
+on:
+   schedule:
+      - cron: "23 * * * *"
+   workflow_dispatch:
+      inputs:
+         tag:
+            description: Upstream release tag (default the latest)
+            required: false
+            type: string
+            default: ""
+
+run-name: omp sync ${{ inputs.tag || 'latest' }}
+concurrency:
+   group: omp-upstream-sync
+   cancel-in-progress: false
+
+permissions: {}
+
+env:
+   UPSTREAM: can1357/oh-my-pi
+   FORK: ${{ github.repository }}
+
+jobs:
+   merge:
+      if: github.ref == 'refs/heads/oml'
+      runs-on: ubuntu-24.04
+      timeout-minutes: 45
+      permissions:
+         contents: read
+         issues: read
+      outputs:
+         tag: ${{ steps.merge.outputs.tag }}
+         status: ${{ steps.format.outputs.status || steps.merge.outputs.status }}
+         sha: ${{ steps.merge.outputs.sha }}
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: oml
+              fetch-depth: 0
+              persist-credentials: false
+         - id: merge
+           env:
+              GH_TOKEN: ${{ github.token }}
+              TAG_INPUT: ${{ inputs.tag }}
+           run: |
+              set -euo pipefail
+              git remote add upstream "https://github.com/$UPSTREAM.git"
+              git config user.name "omp auto-integration"
+              git config user.email "omp-auto@users.noreply.github.com"
+              tag="${TAG_INPUT:-}"
+              [ -n "$tag" ] || tag="$(gh release view -R "$UPSTREAM" --json tagName --jq .tagName)"
+              [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad tag $tag" >&2; exit 1; }
+              echo "tag=$tag" >> "$GITHUB_OUTPUT"
+              if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+                title="omp upstream sync failed for $tag"
+                n="$(gh issue list -R "$GITHUB_REPOSITORY" --label omp-auto --state open --json number,title \
+                  --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+                if [ -n "$n" ]; then
+                  echo "Open issue #$n already reports $tag; skipping."
+                  echo "status=skip" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+              fi
+              git fetch -q upstream "refs/tags/$tag:refs/tags/$tag"
+              set +e
+              out="$(TAG="$tag" FAILURE="$RUNNER_TEMP/failure.json" .github/scripts/merge-upstream.sh)"
+              st=$?
+              set -e
+              printf '%s\n' "$out"
+              status="$(sed -n 's/^status=//p' <<< "$out")"
+              sha="$(sed -n 's/^sha=//p' <<< "$out")"
+              echo "status=$status" >> "$GITHUB_OUTPUT"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              if [ "$status" = conflict ]; then
+                mkdir -p "$RUNNER_TEMP/out"
+                cp "$RUNNER_TEMP/failure.json" "$RUNNER_TEMP/out/"
+                exit 1
+              fi
+              [ "$st" -eq 0 ]
+         - uses: ./.github/actions/bun-install
+           if: steps.merge.outputs.status == 'clean'
+         - name: Install the release native addon
+           if: steps.merge.outputs.status == 'clean'
+           env:
+              TAG: ${{ steps.merge.outputs.tag }}
+           run: |
+              set -euo pipefail
+              npm pack -q --pack-destination "$RUNNER_TEMP" "@oh-my-pi/pi-natives-linux-x64@${TAG#v}" >/dev/null
+              tar xzf "$RUNNER_TEMP"/oh-my-pi-pi-natives-linux-x64-*.tgz -C "$RUNNER_TEMP"
+              mkdir -p packages/natives/native
+              cp "$RUNNER_TEMP"/package/*.node packages/natives/native/
+         - id: format
+           if: steps.merge.outputs.status == 'clean'
+           env:
+              TAG: ${{ steps.merge.outputs.tag }}
+           run: |
+              set -euo pipefail
+              # shellcheck disable=SC1091
+              source .github/omp-build.sh
+              set +e
+              out="$(TAG="$TAG" FORMAT_CMD="$FORMAT_CMD" FAILURE="$RUNNER_TEMP/failure.json" .github/scripts/merge-upstream.sh)"
+              set -e
+              printf '%s\n' "$out"
+              status="$(sed -n 's/^status=//p' <<< "$out")"
+              if [ "$status" = ancestor ]; then
+                echo "status=clean" >> "$GITHUB_OUTPUT"
+                git bundle create "$RUNNER_TEMP/oml.bundle" HEAD "^$(git rev-parse HEAD^1)"
+                jq -n --arg sha "$(git rev-parse HEAD)" --arg base "$(git rev-parse HEAD^1)" --arg tag "$TAG" \
+                  '{sha:$sha, base:$base, tag:$tag}' > "$RUNNER_TEMP/round.json"
+                exit 0
+              fi
+              mkdir -p "$RUNNER_TEMP/out"
+              cp "$RUNNER_TEMP/failure.json" "$RUNNER_TEMP/out/"
+              echo "status=format" >> "$GITHUB_OUTPUT"
+              exit 1
+         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           if: steps.format.outputs.status == 'clean'
+           with:
+              name: sync-merge
+              path: |
+                 ${{ runner.temp }}/oml.bundle
+                 ${{ runner.temp }}/round.json
+              retention-days: 7
+         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           if: always() && (steps.merge.outputs.status == 'conflict' || steps.format.outputs.status == 'format')
+           with:
+              name: sync-failure
+              path: ${{ runner.temp }}/out
+              retention-days: 7
+
+   repair:
+      needs: merge
+      if: ${{ !cancelled() && needs.merge.result == 'failure' && (needs.merge.outputs.status == 'conflict' || needs.merge.outputs.status == 'format') }}
+      runs-on: ubuntu-24.04
+      environment: fork-build
+      timeout-minutes: 120
+      permissions:
+         contents: read
+      env:
+         GH_TOKEN: ${{ github.token }}
+         TAG: ${{ needs.merge.outputs.tag }}
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: oml
+              fetch-depth: 0
+              persist-credentials: false
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              name: sync-failure
+              path: ${{ runner.temp }}
+         - run: |
+              set -euo pipefail
+              git remote add upstream "https://github.com/$UPSTREAM.git"
+              git config user.name "omp auto-integration"
+              git config user.email "omp-auto@users.noreply.github.com"
+              git fetch -q upstream "refs/tags/$TAG:refs/tags/$TAG"
+         - uses: ./.github/actions/bun-install
+         - name: Install the release native addon
+           run: |
+              set -euo pipefail
+              npm pack -q --pack-destination "$RUNNER_TEMP" "@oh-my-pi/pi-natives-linux-x64@${TAG#v}" >/dev/null
+              tar xzf "$RUNNER_TEMP"/oh-my-pi-pi-natives-linux-x64-*.tgz -C "$RUNNER_TEMP"
+              mkdir -p packages/natives/native
+              cp "$RUNNER_TEMP"/package/*.node packages/natives/native/
+         - uses: ./.github/actions/omp-agent
+           with:
+              tag: ${{ needs.merge.outputs.tag }}
+              failure: ${{ runner.temp }}/failure.json
+              openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+              anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+         - name: Prove the merge from the saved commit
+           run: |
+              set -euo pipefail
+              # shellcheck disable=SC1091
+              source .github/omp-build.sh
+              out="$(TAG="$TAG" FORMAT_CMD="$FORMAT_CMD" .github/scripts/merge-upstream.sh)"
+              printf '%s\n' "$out"
+              [ "$(sed -n 's/^status=//p' <<< "$out")" = ancestor ]
+              got="$(git ls-files .github/workflows | sort)"
+              want=$'.github/workflows/omp-sync.yml\n.github/workflows/omp.yml'
+              [ "$got" = "$want" ]
+              git bundle create "$RUNNER_TEMP/oml.bundle" HEAD "^$(git merge-base HEAD origin/oml)"
+              jq -n --arg sha "$(git rev-parse HEAD)" --arg base "$(git rev-parse origin/oml)" --arg tag "$TAG" \
+                '{sha:$sha, base:$base, tag:$tag}' > "$RUNNER_TEMP/round.json"
+         - if: always()
+           run: cp "$RUNNER_TEMP/agent.log" "$RUNNER_TEMP/repair-notes.md" "$RUNNER_TEMP/" 2>/dev/null || true
+         - if: always()
+           uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           with:
+              name: sync-repair
+              path: |
+                 ${{ runner.temp }}/oml.bundle
+                 ${{ runner.temp }}/round.json
+                 ${{ runner.temp }}/repair-notes.md
+                 ${{ runner.temp }}/agent.log
+              retention-days: 30
+              if-no-files-found: ignore
+
+   push:
+      needs: [merge, repair]
+      if: ${{ !cancelled() && (needs.merge.outputs.status == 'clean' || needs.repair.result == 'success') }}
+      runs-on: ubuntu-24.04
+      environment: fork-build
+      timeout-minutes: 20
+      permissions:
+         contents: write
+      steps:
+         - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+           with:
+              ref: oml
+              persist-credentials: false
+              sparse-checkout: .github/scripts/fork-token.sh
+              sparse-checkout-cone-mode: false
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           with:
+              name: ${{ needs.repair.result == 'success' && 'sync-repair' || 'sync-merge' }}
+              path: ${{ runner.temp }}/out
+         - env:
+              TOKEN: ${{ github.token }}
+              FALLBACK_TOKEN: ${{ secrets.OMP_FORK_TOKEN }}
+           run: |
+              set -euo pipefail
+              . .github/scripts/fork-token.sh
+              sha="$(jq -r .sha "$RUNNER_TEMP/out/round.json")"
+              base="$(jq -r .base "$RUNNER_TEMP/out/round.json")"
+              repo="$(mktemp -d)"
+              git -C "$repo" init -q
+              git -C "$repo" fetch -q "$RUNNER_TEMP/out/oml.bundle" "HEAD:refs/heads/candidate"
+              [ "$(git -C "$repo" rev-parse candidate)" = "$sha" ]
+              git -C "$repo" fetch -q "https://github.com/$FORK.git" "refs/heads/oml:refs/heads/oml"
+              [ "$(git -C "$repo" rev-parse oml)" = "$base" ] || { echo "oml moved; refusing a non-fast-forward" >&2; exit 1; }
+              git -C "$repo" merge-base --is-ancestor oml candidate
+              cd "$repo"
+              fork_write fork_push candidate:refs/heads/oml
+
+   escalate:
+      needs: [merge, repair, push]
+      if: >-
+         ${{ !cancelled() && needs.merge.outputs.tag != '' && (
+            needs.repair.result == 'failure' || needs.push.result == 'failure' ||
+            (needs.merge.result == 'failure' && needs.merge.outputs.status != 'conflict' && needs.merge.outputs.status != 'format')) }}
+      runs-on: ubuntu-24.04
+      timeout-minutes: 10
+      permissions:
+         issues: write
+      steps:
+         - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+           continue-on-error: true
+           with:
+              name: sync-repair
+              path: repair
+         - env:
+              GH_TOKEN: ${{ github.token }}
+              TAG: ${{ needs.merge.outputs.tag }}
+              RESULTS: ${{ toJSON(needs) }}
+           run: |
+              set -euo pipefail
+              title="omp upstream sync failed for $TAG"
+              {
+                echo "Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+                echo
+                echo "Jobs: $(jq -r 'to_entries | map("\(.key)=\(.value.result)") | join(" ")' <<< "$RESULTS")"
+                echo
+                echo "Merge \`$TAG\` into oml locally (\`.github/scripts/merge-upstream.sh\`), or fix the cause and re-run this workflow."
+                echo
+                echo "A carried patch stays on oml until an explicit revert. Closing the upstream PR does not remove it."
+                if [ -f repair/repair-notes.md ]; then
+                  printf '\n## repair notes\n\n'
+                  cat repair/repair-notes.md
+                fi
+              } > body.md
+              gh label create omp-auto -R "$GITHUB_REPOSITORY" --color B60205 --description "omp oml sync and build failures" --force >/dev/null
+              n="$(gh issue list -R "$GITHUB_REPOSITORY" --label omp-auto --state open --json number,title \
+                --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+              if [ -n "$n" ]; then
+                gh issue comment "$n" -R "$GITHUB_REPOSITORY" --body-file body.md
+              else
+                gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --label omp-auto --body-file body.md
+              fi
