@@ -82,6 +82,20 @@ export class EventBus {
 	};
 }
 
+export type ExtensionEventBus = Pick<EventBus, "emit" | "on" | "hasListeners" | "watchListeners" | "clear">;
+
+/** Bind listener callbacks to their host-owned extension without exposing that owner to extension code. */
+export function bindExtensionEventBus(eventBus: EventBus, runAsOwner: <T>(action: () => T) => T): ExtensionEventBus {
+	return Object.freeze({
+		emit: eventBus.emit,
+		on: (channel, handler) => eventBus.on(channel, data => runAsOwner(() => handler(data))),
+		hasListeners: eventBus.hasListeners,
+		watchListeners: (channel, onChange) =>
+			eventBus.watchListeners(channel, present => runAsOwner(() => onChange(present))),
+		clear: eventBus.clear,
+	});
+}
+
 /**
  * Publishes a subagent frame on the session bus and the observability bus.
  * SDK embedders may pass the same EventBus for both slots; the identity check
