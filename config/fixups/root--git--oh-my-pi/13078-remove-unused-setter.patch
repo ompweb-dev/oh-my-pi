@@ -1,0 +1,13 @@
+diff --git a/packages/coding-agent/src/modes/interactive-mode.ts b/packages/coding-agent/src/modes/interactive-mode.ts
+index ad39a78113b8c24ded687f9238867062b9149830..459984c1662eb5a5eb5b479874e2b6f2792d8feb 100644
+--- a/packages/coding-agent/src/modes/interactive-mode.ts
++++ b/packages/coding-agent/src/modes/interactive-mode.ts
+@@ -290,7 +290,7 @@ import {
+ 	type VibeParentSession,
+ 	VibeSessionRegistry,
+ } from "../vibe/runtime";
+-import { AssistantMessageComponent, setProseGithubRepo } from "@oh-my-pi/pi-tui/chat/assistant-message";
++import { AssistantMessageComponent } from "@oh-my-pi/pi-tui/chat/assistant-message";
+ import { setEmbedHost } from "@oh-my-pi/pi-tui/chat/embed-host";
+ import { setSvgFigureRendering } from "@oh-my-pi/pi-tui/chat/svg-figure";
+ import { setTableCharts } from "@oh-my-pi/pi-tui/chat/table-chart";

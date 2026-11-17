@@ -1,0 +1,25 @@
+diff --git a/packages/ai/test/openai-codex-transcriptions.test.ts b/packages/ai/test/openai-codex-transcriptions.test.ts
+index f24af753a68ca3f237471a163a550eb6cd1aa125..233ac298036b44bd13668277d70fdcc1fc3e8d6a 100644
+--- a/packages/ai/test/openai-codex-transcriptions.test.ts
++++ b/packages/ai/test/openai-codex-transcriptions.test.ts
+@@ -203,9 +203,9 @@ describe("openai-codex-transcriptions transport", () => {
+ 	});
+ 
+ 	it("posts a stored OAuth access token whose identity lives only on the id token", async () => {
+-		let authorization: string | null = null;
++		const authorization: { value: string | null } = { value: null };
+ 		const fetchImpl: FetchImpl = async (_input, init) => {
+-			authorization = new Headers(init?.headers).get("authorization");
++			authorization.value = new Headers(init?.headers).get("authorization");
+ 			return Response.json({ text: "ok" });
+ 		};
+ 		const result = await transcribeAudio(
+@@ -214,7 +214,7 @@ describe("openai-codex-transcriptions transport", () => {
+ 			{ apiKey: async () => ({ apiKey: "opaque-access", oauthAccess: "opaque-access" }), fetch: fetchImpl },
+ 		);
+ 		expect(result.text).toBe("ok");
+-		expect(authorization).toBe("Bearer opaque-access");
++		expect(authorization.value).toBe("Bearer opaque-access");
+ 	});
+ 
+ 	it("surfaces backend ASR failures as TranscriptionApiError with the upstream detail", async () => {
