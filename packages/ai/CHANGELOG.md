@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Codex subscription speech-to-text: `transcribeAudio` and the auth gateway's `/v1/audio/transcriptions` now accept the `openai-codex/codex-transcribe` model and transcribe with an existing `openai-codex` login (WAV, MP3, M4A, FLAC, WebM and Ogg/Opus; uploads are renamed to match their container, since the backend rejects mismatched extensions) ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait))
+
+### Fixed
+
+- Fixed AAC uploads to Codex Dictation, which the ChatGPT endpoint rejected when the file was named `.aac` ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait)).
+- Fixed Codex Dictation posting a relay API key to ChatGPT when `providers.openai-codex` scopes its URL to Responses but still configures a provider-wide `apiKey`; transcription now refuses a credential that is not a Codex access token before sending ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait)).
+- Fixed Codex Dictation rejecting a stored ChatGPT login whose workspace or email identity is only on the id token ([#15391](https://github.com/can1357/oh-my-pi/pull/15391) by [@andrebrait](https://github.com/andrebrait)).
+
 ## [18.22.1] - 2026-11-17
 
 ### Added
