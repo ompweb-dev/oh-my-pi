@@ -30,7 +30,9 @@ import { withFileMutationSession } from "../../tools/file-write-fallback";
 import { normalizeToolEventInput, resolveToolEventInput } from "../tool-event-input";
 import { applyToolProxy } from "../tool-proxy";
 import type { ExtensionRunner } from "./runner";
-import type { ExtensionAgentIdentity, RegisteredTool, ToolCallEventResult } from "./types";
+import type { Extension, ExtensionAgentIdentity, RegisteredTool, ToolCallEventResult } from "./types";
+
+const registeredToolOwners = new WeakMap<object, Extension>();
 
 /**
  * Second `renderCall` argument that satisfies both the omp and the upstream-pi
@@ -88,6 +90,10 @@ export class RegisteredToolAdapter implements AgentTool<any, any, any> {
 	) {
 		applyToolProxy(registeredTool.definition, this);
 		this.loadMode = defaultLoadModeForToolName(registeredTool.definition.name, registeredTool.definition.loadMode);
+		const owner = runner
+			.getLoadedExtensions()
+			.find(extension => extension.tools.get(registeredTool.definition.name) === registeredTool);
+		if (owner) registeredToolOwners.set(this, owner);
 
 		// Only define render methods when the underlying definition provides them.
 		// If these exist unconditionally on the prototype, ToolExecutionComponent
@@ -125,17 +131,19 @@ export class RegisteredToolAdapter implements AgentTool<any, any, any> {
 		// call, so a bare `ctx.invokeTool(params)` keeps the caller's `toolCall`/provider metadata
 		// (write/edit LSP batching, computer safety acknowledgement), stops when the outer call is
 		// aborted, and still streams native progress.
-		return this.registeredTool.definition.execute(
-			toolCallId,
-			params,
-			signal,
-			onUpdate,
-			this.runner.createContext(undefined, {
-				toolName: this.registeredTool.definition.name,
-				context,
+		return this.runner.runWithExtensionIdentity(registeredToolOwners.get(this), () =>
+			this.registeredTool.definition.execute(
+				toolCallId,
+				params,
 				signal,
 				onUpdate,
-			}),
+				this.runner.createContext(undefined, {
+					toolName: this.registeredTool.definition.name,
+					context,
+					signal,
+					onUpdate,
+				}),
+			),
 		);
 	}
 }
@@ -213,6 +221,7 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 	declare label: string;
 	declare strict: boolean;
 	readonly #agent: ExtensionAgentIdentity | undefined;
+	readonly #extensionOwner: Extension | undefined;
 
 	constructor(
 		private tool: AgentTool<TParameters, TDetails>,
@@ -220,6 +229,7 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 		agent?: ExtensionAgentIdentity,
 	) {
 		this.#agent = agent;
+		this.#extensionOwner = registeredToolOwners.get(tool);
 		applyToolProxy(tool, this);
 	}
 
@@ -477,14 +487,16 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 			try {
 				// The call's signal closes the prompt: aborting the turn (Esc, a session switch) must not
 				// wait on an approval the user can no longer see or answer.
-				const answer = await untilAborted(signal, () =>
-					requestApproval(uiContext, this.tool, resolvedArgs, {
-						reason: approvalCheck.reason,
-						appendix: safetyAppendix,
-						sessionSubject: sessionScope?.subject,
-						grants: cacheTargets,
-						signal,
-					}),
+				const answer = await this.runner.runWithExtensionIdentity(this.#extensionOwner, () =>
+					untilAborted(signal, () =>
+						requestApproval(uiContext, this.tool, resolvedArgs, {
+							reason: approvalCheck.reason,
+							appendix: safetyAppendix,
+							sessionSubject: sessionScope?.subject,
+							grants: cacheTargets,
+							signal,
+						}),
+					),
 				);
 				approved = answer !== "deny";
 				if (answer === "session" && sessionScope) this.runner.grantSessionApproval(sessionScope.key);
@@ -521,7 +533,9 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 			// a runner exists.
 			result = await this.runner.runScoped(() =>
 				withFileMutationSession(this.runner.sessionId, () =>
-					this.tool.execute(toolCallId, effectiveParams, signal, onUpdate, context),
+					this.runner.runWithExtensionIdentity(this.#extensionOwner, () =>
+						this.tool.execute(toolCallId, effectiveParams, signal, onUpdate, context),
+					),
 				),
 			);
 		} catch (err) {

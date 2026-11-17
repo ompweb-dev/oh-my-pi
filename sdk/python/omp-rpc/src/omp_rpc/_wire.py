@@ -1570,6 +1570,8 @@ class SelectUiRequest:
     method: Literal["select"] = "select"
     title: str
     options: tuple[str, ...]
+    extension_id: str | None = None
+    """Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs."""
     option_details: tuple[SelectOptionDetail, ...] | None = None
     initial_index: int | None = None
     """Index into `options` to focus first."""
@@ -1589,6 +1591,8 @@ class ConfirmUiRequest:
     method: Literal["confirm"] = "confirm"
     title: str
     message: str
+    extension_id: str | None = None
+    """Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs."""
     timeout: int | None = None
 
 
@@ -1695,6 +1699,8 @@ class ExtensionUiRequest(ExtensionUiRequestMixin):
     id: str
     title: str | None = None
     options: tuple[str, ...] | None = None
+    extension_id: str | None = None
+    """Opaque fixed-length identity derived from the extension's registry-resolved source; omitted for native/core dialogs."""
     option_details: tuple[SelectOptionDetail, ...] | None = None
     initial_index: int | None = None
     """Index into `options` to focus first."""
@@ -3123,6 +3129,7 @@ def parse_select_ui_request(value: object, path: str = "SelectUiRequest") -> Sel
         id=required(payload, "id", decode_str, path),
         title=required(payload, "title", decode_str, path),
         options=required(payload, "options", array(decode_str), path),
+        extension_id=optional(payload, "extensionId", decode_str, path),
         option_details=optional(payload, "optionDetails", array(parse_select_option_detail), path),
         initial_index=optional(payload, "initialIndex", decode_int, path),
         selection_marker=optional(payload, "selectionMarker", cast('Decoder[Literal["radio", "checkbox"]]', literal(frozenset({"radio", "checkbox"}))), path),
@@ -3140,6 +3147,7 @@ def parse_confirm_ui_request(value: object, path: str = "ConfirmUiRequest") -> C
         id=required(payload, "id", decode_str, path),
         title=required(payload, "title", decode_str, path),
         message=required(payload, "message", decode_str, path),
+        extension_id=optional(payload, "extensionId", decode_str, path),
         timeout=optional(payload, "timeout", decode_int, path),
     )
 
@@ -3264,6 +3272,7 @@ def parse_extension_ui_request(value: object, path: str = "ExtensionUiRequest") 
         id=required(payload, "id", decode_str, path),
         title=optional(payload, "title", decode_str, path),
         options=optional(payload, "options", array(decode_str), path),
+        extension_id=optional(payload, "extensionId", decode_str, path),
         option_details=optional(payload, "optionDetails", array(parse_select_option_detail), path),
         initial_index=optional(payload, "initialIndex", decode_int, path),
         selection_marker=optional(payload, "selectionMarker", cast('Decoder[Literal["radio", "checkbox"]]', literal(frozenset({"radio", "checkbox"}))), path),
