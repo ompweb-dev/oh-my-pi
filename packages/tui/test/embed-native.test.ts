@@ -50,6 +50,7 @@ const HOST: AssistantMessageHost = {
 	tableChartsVisible: true,
 	hideToolActivity: false,
 	toolOutputExpanded: false,
+	proseGithubRepo: () => () => undefined,
 	ui: { requestRender: () => {}, imageBudget: new ImageBudget(8, () => {}) },
 	resolveAssistantMessageLinkHrefs: async () => new Map(),
 };
