@@ -2374,6 +2374,7 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 			emitNotice: (level, message, source) => this.emitNotice(level, message, source),
 			setModelTemporary: (model, thinkingLevel, isCurrent) =>
 				this.#models.setModelTemporary(model, thinkingLevel, { prewalk: true }, "automatic", isCurrent),
+			modelFitsEffortCeiling: model => this.#models.fitsEffortCeiling(model),
 			setActiveToolsByName: names => this.setActiveToolsByName(names),
 			restoreNonMCPToolPresentation: (nonMCPToolNames, nonMCPMountedToolNames, registeredToolNames) =>
 				this.restoreNonMCPToolPresentation(nonMCPToolNames, nonMCPMountedToolNames, registeredToolNames),
@@ -2466,6 +2467,7 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 			scopedModels: config.scopedModels,
 			thinkingLevel: config.thinkingLevel,
 			thinkingLevelCeiling: config.thinkingLevelCeiling,
+			thinkingLevelCeilingSetting: config.thinkingLevelCeilingSetting,
 			serviceTierByFamily: config.serviceTierByFamily,
 		});
 
@@ -2500,7 +2502,9 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 			thinkingLevel: () => this.thinkingLevel,
 			configuredThinkingLevel: () => this.configuredThinkingLevel(),
 			setThinkingLevel: level => this.#models.setThinkingLevel(level),
-			thinkingLevelCeiling: () => this.#models.thinkingLevelCeiling,
+			thinkingLevelCeiling: model => this.#models.thinkingLevelCeiling?.(model),
+			modelFitsEffortCeiling: model => this.#models.fitsEffortCeiling(model),
+			clampAutoThinkingToCeiling: () => this.#models.clampAutoThinkingToCeiling(),
 			modelFallbackDisabled: () => this.#disableModelFallback,
 			isDisposed: () => this.#isDisposed,
 			isStreaming: () => this.isStreaming,
@@ -3203,6 +3207,7 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 			setModelTemporary: async (model, thinkingLevel, options) => {
 				await this.#models.setModelTemporary(model, thinkingLevel, options, "automatic");
 			},
+			modelFitsEffortCeiling: model => this.#models.fitsEffortCeiling(model),
 			abort: options => this.abort(options),
 			abortHandoff: () => this.abortHandoff(),
 		};
