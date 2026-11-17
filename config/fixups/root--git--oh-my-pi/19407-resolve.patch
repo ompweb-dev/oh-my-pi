@@ -1,5 +1,5 @@
 diff --git a/packages/coding-agent/src/modes/rpc/rpc-mode.ts b/packages/coding-agent/src/modes/rpc/rpc-mode.ts
-index d1d17b723e32acf5f43d527d4b0a9e056a4006c8..80742ac82b74280bd10bdafe47a6b604c9345da1 100644
+index bcb348183fd2aa7a9a2efd46a0868e5c790ca0d1..9372d838379d4dfa5d19d7e5ea67843b35780248 100644
 --- a/packages/coding-agent/src/modes/rpc/rpc-mode.ts
 +++ b/packages/coding-agent/src/modes/rpc/rpc-mode.ts
 @@ -34,5 +34,2 @@ import {
