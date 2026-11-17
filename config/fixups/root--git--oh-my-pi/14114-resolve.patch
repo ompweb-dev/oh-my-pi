@@ -1,12 +1,12 @@
 diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
-index d159b0a0c8d7bf9f66de7a29ee30f20cbf0c638f..c3b873cbad0377de18e9383b07e991c69b8d3fcd 100644
+index 464fdaf23b6109bd9497149f12b0fdb938f053d5..a72eec9614225036bcdbcfd8bc9a11f2e9b71759 100644
 --- a/packages/coding-agent/CHANGELOG.md
 +++ b/packages/coding-agent/CHANGELOG.md
 @@ -9,2 +9,3 @@
  - Added `skills.optInSkills` to keep matching skills available through `/skill:<name>` and `skill://<name>` while hiding them from the model prompt, without editing their files; `omp skill list --json` reports the result as `hide` ([#14049](https://github.com/can1357/oh-my-pi/pull/14049) by [@karls-science](https://github.com/karls-science) and [@andrebrait](https://github.com/andrebrait)).
 +- Added an Auto Thinking Source setting (`providers.autoThinkingSource`): `vendor` makes the `auto` thinking level use the model vendor's default effort (for example `medium` on Claude Opus 5.5 and GPT-5.6, `high` on other Claude models) instead of classifying each prompt ([#14114](https://github.com/can1357/oh-my-pi/pull/14114) by [@andrebrait](https://github.com/andrebrait))
  
-@@ -376,7 +377,3 @@
+@@ -408,7 +409,3 @@
  
 -<<<<<<< ours
  - Added custom OpenAI-compatible provider management and comment-preserving `models.yml` editing ([#13874](https://github.com/can1357/oh-my-pi/pull/13874) by [@andrebrait](https://github.com/andrebrait)).

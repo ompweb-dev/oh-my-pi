@@ -1,8 +1,8 @@
 diff --git a/packages/tui/CHANGELOG.md b/packages/tui/CHANGELOG.md
-index 1589614211e817515fd51e9b0e972b4545fbea04..22315b5e1ab5a96fc7ea5e8420c0de4d0b2b4b3e 100644
+index 4562322a953fa3cc7b894587495733e21d9c4754..8d4825ff9d8ad34b75fde0553b5b53d9c365972f 100644
 --- a/packages/tui/CHANGELOG.md
 +++ b/packages/tui/CHANGELOG.md
-@@ -106,13 +106,10 @@
+@@ -129,13 +129,10 @@
  
  ### Added
  
