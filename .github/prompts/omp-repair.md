@@ -16,12 +16,12 @@ You run unattended in GitHub Actions. Nobody will answer. Finish the merge or st
 
 ## What to do
 
-Run `.github/scripts/merge-upstream.sh`. It merges `$TAG` with `--no-ff` and deletes every `.github/workflows/*` that is not `omp-sync.yml` or `omp.yml`. Modify/delete conflicts on those files stay deleted. Do not restore them and do not add an upstream workflow.
+Run the script with `FORMAT_CMD` set, as the workflow checks it: `source .github/omp-build.sh && FORMAT_CMD="$FORMAT_CMD" .github/scripts/merge-upstream.sh`. It merges `$TAG` with `--no-ff` and deletes every `.github/workflows/*` that is not `omp-sync.yml` or `omp.yml`. Modify/delete conflicts on those files stay deleted. Do not restore them and do not add an upstream workflow.
 
 - `conflict`: resolve the listed files so oml keeps its carried behavior and takes the release's changes. Do not commit. Re-run the script; it commits `Merge upstream <tag> into oml`.
-- `format`: the merge is committed. Source `.github/omp-build.sh`, run `eval "$FORMAT_CMD"`, and commit the result as a follow-up. Do not amend the merge commit.
+- `format`: the merge is committed. Run `eval "$FORMAT_CMD"`, fix whatever makes it fail, and commit the result as a follow-up. Do not amend the merge commit.
 
-Re-run the script until it prints `status=ancestor`.
+Re-run the script (with `FORMAT_CMD`) until it prints `status=ancestor`. It reports `status=format` after a resolved conflict too, when the merged tree is not formatted.
 
 ## Do not
 

@@ -178,9 +178,12 @@ jobs:
               set -euo pipefail
               # shellcheck disable=SC1091
               source .github/omp-build.sh
-              out="$(TAG="$TAG" FORMAT_CMD="$FORMAT_CMD" .github/scripts/merge-upstream.sh)"
+              out="$(TAG="$TAG" FORMAT_CMD="$FORMAT_CMD" FAILURE="$RUNNER_TEMP/prove.json" .github/scripts/merge-upstream.sh)" || true
               printf '%s\n' "$out"
-              [ "$(sed -n 's/^status=//p' <<< "$out")" = ancestor ]
+              if [ "$(sed -n 's/^status=//p' <<< "$out")" != ancestor ]; then
+                jq -r .log "$RUNNER_TEMP/prove.json" 2>/dev/null || true
+                exit 1
+              fi
               got="$(git ls-files .github/workflows | sort)"
               want=$'.github/workflows/omp-sync.yml\n.github/workflows/omp.yml'
               [ "$got" = "$want" ]

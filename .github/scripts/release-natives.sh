@@ -14,7 +14,7 @@ mkdir -p "$dir/natives"
 gh release download "$TAG" -R "$UPSTREAM" -D "$dir" -p omp-linux-x64 -p SHA256SUMS.txt
 (cd "$dir" && grep -E ' \*?omp-linux-x64$' SHA256SUMS.txt | sha256sum -c -)
 chmod +x "$dir/omp-linux-x64"
-HOME="$dir/home" PI_NATIVES_DIR="$dir/natives" "$dir/omp-linux-x64" --smoke-test >/dev/null
+env -u GH_TOKEN HOME="$dir/home" PI_NATIVES_DIR="$dir/natives" "$dir/omp-linux-x64" --smoke-test >/dev/null
 shopt -s nullglob
 addons=("$dir/natives"/*/*.node)
 [ "${#addons[@]}" -gt 0 ] || { echo "no addon extracted from omp-linux-x64 $TAG" >&2; exit 1; }
