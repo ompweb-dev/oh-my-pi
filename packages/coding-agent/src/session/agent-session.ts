@@ -10319,11 +10319,6 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 			if (this.#refuseOverCostCap()) return false;
 			// Flush any pending bash messages before the new prompt
 			await this.#bash.flushPending();
-			this.#eval.flushPending();
-			this.#flushExcludedRows();
-			// This turn carries the assignment: IRC asides parked for it fold in ahead of the message.
-			this.#ircAwaitingAssignment = false;
-			this.#irc.flushPending();
 
 			this.#todo.resetCycle();
 			this.#resetPromptMaintenanceState();
@@ -10609,6 +10604,7 @@ export class AgentSession implements SettingsScope, AgentViewSession {
 							// Folded in only once the turn is admitted: a prompt handed back leaves them for the turn
 							// that runs. This turn carries the assignment: IRC asides parked for it fold in ahead of it.
 							this.#eval.flushPending();
+							this.#flushExcludedRows();
 							this.#ircAwaitingAssignment = false;
 							this.#irc.flushPending();
 						},
