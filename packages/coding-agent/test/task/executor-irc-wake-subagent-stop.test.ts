@@ -234,8 +234,9 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 				maxRuntimeMs: args.maxRuntimeMs,
 				softRequestBudget: args.softRequestBudget,
 				agentType: args.agentType,
-				structured: args.structured,
-				outputSchema: args.outputSchema,
+				// Since omp 19 a child has the `yield` tool exactly when it has an output schema; `null`
+				// is an unconstrained one, and no schema makes a message-result child.
+				outputSchema: args.structured === false ? undefined : (args.outputSchema ?? null),
 			});
 		}
 		return { session, mock, stopEvents, lifecycle, eventBus, artifact: path.join(tempDir.path(), `${AGENT_ID}.md`) };
@@ -693,7 +694,12 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 				return undefined;
 			},
 		});
-		attachIrcWakeTurnMonitor(run.session, { id: AGENT_ID, agent: wakeAgent, artifactsDir: tempDir.path() });
+		attachIrcWakeTurnMonitor(run.session, {
+			id: AGENT_ID,
+			agent: wakeAgent,
+			outputSchema: null,
+			artifactsDir: tempDir.path(),
+		});
 
 		await deliverWake(run.session, "m1");
 		await stopEntered.promise;
@@ -701,6 +707,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const followUp = runSubagentFollowUpTurn({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do more",
 			signal: controller.signal,
 			artifactsDir: tempDir.path(),
@@ -944,6 +951,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 			const followUp = runSubagentFollowUpTurn({
 				id: AGENT_ID,
 				agent: wakeAgent,
+				outputSchema: null,
 				message: "do more",
 				artifactsDir: tempDir.path(),
 			});
@@ -1275,7 +1283,12 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 				return { decision: "block", reason: "keep going" };
 			},
 		});
-		attachIrcWakeTurnMonitor(run.session, { id: AGENT_ID, agent: wakeAgent, artifactsDir: tempDir.path() });
+		attachIrcWakeTurnMonitor(run.session, {
+			id: AGENT_ID,
+			agent: wakeAgent,
+			outputSchema: null,
+			artifactsDir: tempDir.path(),
+		});
 		// The owner's wake takes the session between the follow-up's ownership check and its first prompt.
 		const prompt = run.session.prompt.bind(run.session);
 		let raced = false;
@@ -1291,6 +1304,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const followUp = runSubagentFollowUpTurn({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do more",
 			artifactsDir: tempDir.path(),
 		});
@@ -1412,6 +1426,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const followUpOptions = () => ({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do more",
 			artifactsDir: tempDir.path(),
 		});
@@ -1494,6 +1509,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const followUpOptions = () => ({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do more",
 			artifactsDir: tempDir.path(),
 		});
@@ -1836,6 +1852,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 			const followUp = runSubagentFollowUpTurn({
 				id: AGENT_ID,
 				agent: wakeAgent,
+				outputSchema: null,
 				message: "do more",
 				artifactsDir: tempDir.path(),
 			});
@@ -2000,6 +2017,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const result = await runSubagentFollowUpTurn({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do the work",
 			artifactsDir: tempDir.path(),
 			eventBus: run.eventBus,
@@ -2063,6 +2081,7 @@ describe("IRC wake turn subagent_stop (real session)", () => {
 		const turn = runSubagentFollowUpTurn({
 			id: AGENT_ID,
 			agent: wakeAgent,
+			outputSchema: null,
 			message: "do the work",
 			artifactsDir: tempDir.path(),
 			eventBus: run.eventBus,

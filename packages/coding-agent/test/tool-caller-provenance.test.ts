@@ -331,7 +331,6 @@ describe("tool caller provenance", () => {
 					totalLines: 0,
 					agentsMdFiles: [],
 				},
-				structured: false,
 				keepAlive: true,
 			});
 

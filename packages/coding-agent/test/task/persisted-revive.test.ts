@@ -183,6 +183,8 @@ async function createPersistedSession(
 		/** Transcript of the session that spawned this one, as a nested child's header records it. */
 		parentSession?: string;
 		actualEffort?: Effort;
+		/** The spawn's result contract: since omp 19 the child has `yield` exactly when this is set. */
+		outputSchema?: unknown;
 	},
 ): Promise<string> {
 	const manager = contract?.parentSession
@@ -210,6 +212,7 @@ async function createPersistedSession(
 		perCallModelIdentity: contract?.perCallModelIdentity,
 		perCallThinkingLevel: contract?.perCallThinkingLevel,
 		actualEffort: contract?.actualEffort,
+		outputSchema: contract?.outputSchema,
 		...(contract?.compactionThreshold !== undefined
 			? { compactionThreshold: contract.compactionThreshold }
 			: undefined),
@@ -626,9 +629,10 @@ describe("persisted subagent revival", () => {
 			return { session: createRevivedSession([]).session } as CreateAgentSessionResult;
 		});
 
-		// A session persisted without `yield` returned its final message.
-		for (const tools of [["read", "yield"], ["read"]]) {
-			const sessionFile = await createPersistedSession(cwd, undefined, undefined, undefined, { tools });
+		// A session persisted without an output schema (and so without `yield`) returned its final message.
+		const outputSchema = { type: "object", properties: { ok: { type: "boolean" } } };
+		for (const contract of [{ tools: ["read", "yield"], outputSchema }, { tools: ["read"] }]) {
+			const sessionFile = await createPersistedSession(cwd, undefined, undefined, undefined, contract);
 			const ref = createRef(sessionFile);
 			AgentRegistry.global().register({
 				id: ref.id,
@@ -644,7 +648,7 @@ describe("persisted subagent revival", () => {
 			AgentRegistry.resetGlobalForTests();
 		}
 
-		expect(captured.map(options => options?.structured)).toEqual([true, false]);
+		expect(captured.map(options => options?.outputSchema)).toEqual([outputSchema, undefined]);
 	});
 
 	it("cold-revives a restricted contract without loading hostile same-name capabilities", async () => {

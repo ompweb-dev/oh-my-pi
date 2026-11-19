@@ -560,7 +560,7 @@ enabled: false
 				prompt: systemPrompt.join("\n"),
 				discoveredSkillNames: skills.map(skill => skill.name),
 				skillCommands: commands.filter(command => command.source === "skill").map(command => command.name),
-				manualSkillContent: manualSkillResource.content,
+				manualSkillContent: manualSkillResource.content.toString(),
 			};
 		}
 

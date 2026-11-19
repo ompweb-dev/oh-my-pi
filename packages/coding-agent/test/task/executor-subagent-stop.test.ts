@@ -71,7 +71,7 @@ interface PromptCall {
 	options?: PromptOptions;
 	/** Append a child assistant turn carrying `text`, as the model's reply next turn would. */
 	reply: (text: string) => void;
-	/** End the turn on a final report (`structured: false` runs): a counted `stop` assistant message carrying `text`. */
+	/** End the turn on a final report (runs without an `outputSchema`): a counted `stop` assistant message carrying `text`. */
 	report: (text: string, stopReason?: AssistantMessage["stopReason"]) => void;
 	/** Submit a terminal `yield` carrying `data`. */
 	yieldTerminal: (data: unknown) => void;
@@ -319,8 +319,11 @@ describe("runSubprocess subagent_stop", () => {
 		tempDir[Symbol.dispose]();
 	});
 
+	// Since omp 19 a run has the `yield` tool exactly when it has an output schema. `null` is an
+	// unconstrained one: any data yields, and a final report stays the fallback result.
 	function baseOptions(id: string) {
 		return {
+			outputSchema: null as unknown,
 			cwd: "/tmp",
 			agent: baseAgent,
 			task: "do the work",
@@ -845,6 +848,7 @@ describe("runSubprocess subagent_stop", () => {
 				const result = await runSubagentFollowUpTurn({
 					id,
 					agent: baseAgent,
+					outputSchema: null,
 					message: "continue",
 					signal: controller.signal,
 					artifactsDir: tempDir.path(),
@@ -984,7 +988,6 @@ describe("runSubprocess subagent_stop", () => {
 			getSessionSpawns: () => "*",
 			settings: Settings.isolated(),
 			outputSchema,
-			getLastAssistantText: () => "prose",
 		};
 		const harness = createHarness({
 			hasStopHandlers: true,
@@ -1008,7 +1011,7 @@ describe("runSubprocess subagent_stop", () => {
 		const result = await runSubprocess({ ...baseOptions(id), outputSchema });
 
 		expect(harness.yieldErrors).toHaveLength(1);
-		expect(harness.yieldErrors[0]).toContain("last-turn result cannot satisfy it");
+		expect(harness.yieldErrors[0]).toContain("none were submitted");
 		expect(result.exitCode).toBe(0);
 		expect(JSON.parse(result.output)).toEqual({ findings: ["fresh"] });
 	});
@@ -1178,6 +1181,7 @@ describe("runSubprocess subagent_stop", () => {
 		const resumed = await runSubagentFollowUpTurn({
 			id,
 			agent: baseAgent,
+			outputSchema: null,
 			message: "continue",
 			parentSessionId: "parent-session-1",
 			parentSessionFile: "/parent/session.jsonl",
@@ -1271,6 +1275,7 @@ describe("runSubprocess subagent_stop", () => {
 		const result = await runSubagentFollowUpTurn({
 			id,
 			agent: baseAgent,
+			outputSchema: null,
 			message: "continue",
 			parentSessionId: "parent-session-1",
 			parentSessionFile: "/parent/session.jsonl",
@@ -1307,6 +1312,7 @@ describe("runSubprocess subagent_stop", () => {
 		await runSubagentFollowUpTurn({
 			id,
 			agent: baseAgent,
+			outputSchema: null,
 			message: "continue",
 			completionProbe: true,
 			onProgress: progress => {
@@ -1350,7 +1356,7 @@ describe("runSubprocess subagent_stop", () => {
 		});
 	});
 
-	describe("without a yield tool (structured: false)", () => {
+	describe("without a yield tool (no outputSchema)", () => {
 		it("offers the settled final report turn once and publishes it when allowed", async () => {
 			const id = "UnstructuredAllowed";
 			const harness = createHarness({
@@ -1360,7 +1366,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			expect(harness.events).toHaveLength(1);
 			expect(harness.events[0]).toMatchObject({ agent_id: id, stop_hook_active: false });
@@ -1382,7 +1388,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			expect(harness.prompts.map(call => call.text)).toEqual(["do the work", "keep going"]);
 			expect(harness.prompts[1]?.options).toMatchObject({ attribution: "agent", synthetic: true });
@@ -1409,7 +1415,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			expect(harness.prompts).toHaveLength(2);
 			expect(harness.prompts[1]?.text).toContain("without a reason");
@@ -1433,7 +1439,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			expect(harness.events).toHaveLength(1);
 			expect(result.exitCode).not.toBe(0);
@@ -1458,7 +1464,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			expect(harness.events).toEqual([]);
 			expect(result.error).toBe(SUBAGENT_WARNING_EMPTY_MESSAGE);
@@ -1479,7 +1485,7 @@ describe("runSubprocess subagent_stop", () => {
 			mockCreateAgentSession(harness.session);
 			registerRunning(id, harness.session);
 
-			const result = await runSubprocess({ ...baseOptions(id), structured: false });
+			const result = await runSubprocess({ ...baseOptions(id), outputSchema: undefined });
 
 			// The cut-off report would otherwise be published unjudged.
 			expect(harness.events).toHaveLength(2);
@@ -1509,7 +1515,7 @@ describe("runSubprocess subagent_stop", () => {
 
 			const result = await runSubprocess({
 				...baseOptions(id),
-				structured: false,
+				outputSchema: undefined,
 				settings: Settings.isolated({ "task.softRequestBudget": 2 }),
 				modelRegistry: { refresh: async () => {} } as unknown as ModelRegistry,
 			});
@@ -1543,7 +1549,7 @@ describe("runSubprocess subagent_stop", () => {
 
 			const result = await runSubprocess({
 				...baseOptions(id),
-				structured: false,
+				outputSchema: undefined,
 				settings: Settings.isolated({ "task.softRequestBudget": 2 }),
 				modelRegistry: { refresh: async () => {} } as unknown as ModelRegistry,
 			});
@@ -1579,7 +1585,7 @@ describe("runSubprocess subagent_stop", () => {
 
 			const result = await runSubprocess({
 				...baseOptions(id),
-				structured: false,
+				outputSchema: undefined,
 				settings: Settings.isolated({ "task.softRequestBudget": 2 }),
 				modelRegistry: { refresh: async () => {} } as unknown as ModelRegistry,
 			});
@@ -1608,7 +1614,7 @@ describe("runSubprocess subagent_stop", () => {
 				id,
 				agent: baseAgent,
 				message: "continue",
-				structured: false,
+				outputSchema: undefined,
 				artifactsDir: tempDir.path(),
 			});
 
