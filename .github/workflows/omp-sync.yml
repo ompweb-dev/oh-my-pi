@@ -3,10 +3,11 @@ name: omp upstream sync
 # Merges the latest upstream release tag into oml and pushes it only once it is
 # green: check out oml, merge the tag --no-ff, generate and format, build and run
 # TEST_CMD (.github/scripts/sync-verify.sh, the same BUILD_CMD/TEST_CMD as
-# omp.yml's build). A conflict goes to an agent round (.github/actions/sync-agent:
-# Codex, Claude as fallback) before the gate; a red gate gets one fix round. The
-# tested commit then fast-forwards oml, which starts omp.yml's build and release.
-# Anything still red opens an issue and pushes nothing.
+# omp.yml's build). A conflict goes to an agent round (.github/actions/sync-agent,
+# Claude) before the gate; a red gate gets one fix round. The tested commit then
+# fast-forwards oml, which starts omp.yml's build and release. Anything still red
+# opens an issue and pushes nothing; the attempt's commits are kept in the
+# sync-notes artifact (attempt.bundle) to finish locally.
 #
 # Foreign .github/workflows/* stay deleted (modify/delete resolves to deleted,
 # and a workflow the release adds is removed in the merge commit). Only
@@ -133,7 +134,6 @@ jobs:
               instructions: .github/prompts/omp-resolve.md
               context: ${{ runner.temp }}/conflict.md
               check: FAILURE="$RUNNER_TEMP/failure.json" .github/scripts/sync-merge-check.sh
-              openai-api-key: ${{ secrets.OPENAI_API_KEY }}
               anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
               github-token: ${{ github.token }}
          - id: gate
@@ -153,7 +153,6 @@ jobs:
               instructions: .github/prompts/omp-fix.md
               context: ${{ runner.temp }}/gate.md
               check: .github/scripts/sync-verify.sh
-              openai-api-key: ${{ secrets.OPENAI_API_KEY }}
               anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
               github-token: ${{ github.token }}
          - name: Bundle the tested commit
@@ -179,6 +178,12 @@ jobs:
                  ${{ runner.temp }}/oml.bundle
                  ${{ runner.temp }}/round.json
               retention-days: 7
+         - name: Bundle the failed attempt
+           if: failure() && steps.tag.outputs.status == 'merge'
+           run: |
+              git status --short
+              git bundle create "$RUNNER_TEMP/attempt.bundle" HEAD "^$(cat "$RUNNER_TEMP/base")" ||
+                echo "no commits to keep (the merge was not committed)"
          - if: always() && steps.tag.outputs.status == 'merge'
            uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
            with:
@@ -186,6 +191,7 @@ jobs:
               path: |
                  ${{ runner.temp }}/notes
                  ${{ runner.temp }}/verify.log
+                 ${{ runner.temp }}/attempt.bundle
               retention-days: 30
               if-no-files-found: ignore
 
