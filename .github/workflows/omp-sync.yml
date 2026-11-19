@@ -233,10 +233,11 @@ jobs:
               base="$(jq -r .base "$RUNNER_TEMP/out/round.json")"
               repo="$(mktemp -d)"
               git -C "$repo" init -q
-              git -C "$repo" fetch -q "$RUNNER_TEMP/out/oml.bundle" "HEAD:refs/heads/candidate"
-              [ "$(git -C "$repo" rev-parse candidate)" = "$sha" ]
+              # oml first: the bundle is thin, its prerequisites are oml's commits.
               git -C "$repo" fetch -q "https://github.com/$FORK.git" "refs/heads/oml:refs/heads/oml"
               [ "$(git -C "$repo" rev-parse oml)" = "$base" ] || { echo "oml moved; refusing a non-fast-forward" >&2; exit 1; }
+              git -C "$repo" fetch -q "$RUNNER_TEMP/out/oml.bundle" "HEAD:refs/heads/candidate"
+              [ "$(git -C "$repo" rev-parse candidate)" = "$sha" ]
               git -C "$repo" merge-base --is-ancestor oml candidate
               cd "$repo"
               fork_write fork_push candidate:refs/heads/oml
