@@ -1,0 +1,80 @@
+name: omp sync agent
+description: >-
+   One agent round of the upstream sync: Codex (openai/codex-action) on the
+   prompt, then `check`; only when Codex fails or `check` still fails, Claude
+   (anthropics/claude-code-action) on the same prompt, then `check` again. The
+   round fails when the last `check` fails. Each agent's final message goes to
+   $RUNNER_TEMP/notes/<name>-<agent>.md.
+inputs:
+   name:
+      description: Round name (resolve or fix), used for the notes files
+      required: true
+   instructions:
+      description: Prompt file under .github/prompts
+      required: true
+   context:
+      description: File appended to the instructions (failure details)
+      required: true
+   check:
+      description: Shell command that exits 0 once the round's goal is met
+      required: true
+   openai-api-key:
+      required: true
+   anthropic-api-key:
+      required: true
+   github-token:
+      required: true
+runs:
+   using: composite
+   steps:
+      - id: prompt
+        shell: bash
+        env:
+           NAME: ${{ inputs.name }}
+           INSTRUCTIONS: ${{ inputs.instructions }}
+           CONTEXT: ${{ inputs.context }}
+        run: |
+           set -euo pipefail
+           mkdir -p "$RUNNER_TEMP/notes"
+           prompt="$RUNNER_TEMP/prompt-$NAME.md"
+           { cat "$INSTRUCTIONS"; printf '\n'; cat "$CONTEXT"; } > "$prompt"
+           echo "file=$prompt" >> "$GITHUB_OUTPUT"
+      # Full access: the agent runs bun, bazel and tests that open local sockets. The
+      # runner is ephemeral, the checkout holds no credentials and the job token is read-only.
+      - id: codex
+        continue-on-error: true
+        uses: openai/codex-action@306c6a196a99dcc6582530c396a19d2672d5e9ec # v1.14
+        with:
+           prompt-file: ${{ steps.prompt.outputs.file }}
+           output-file: ${{ runner.temp }}/notes/${{ inputs.name }}-codex.md
+           openai-api-key: ${{ inputs.openai-api-key }}
+           sandbox: danger-full-access
+           effort: high
+      - id: check-codex
+        continue-on-error: true
+        shell: bash
+        env:
+           CHECK: ${{ inputs.check }}
+        run: eval "$CHECK"
+      - id: claude
+        if: steps.check-codex.outcome == 'failure'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@06ff7b0ede7cd9ab01b95720b4768948f3779779 # v1.0.283
+        with:
+           anthropic_api_key: ${{ inputs.anthropic-api-key }}
+           github_token: ${{ inputs.github-token }}
+           prompt: >-
+              Read ${{ steps.prompt.outputs.file }} and do what it says. The previous agent may have
+              left partial work in the checkout; build on it or undo it.
+           claude_args: >-
+              --model claude-sonnet-5-5
+              --allowedTools Bash,Read,Edit,MultiEdit,Write,Glob,Grep
+      - if: steps.check-codex.outcome == 'failure'
+        shell: bash
+        env:
+           CHECK: ${{ inputs.check }}
+           EXECUTION: ${{ steps.claude.outputs.execution_file }}
+           NOTES: ${{ runner.temp }}/notes/${{ inputs.name }}-claude.md
+        run: |
+           [ -z "$EXECUTION" ] || jq -r 'map(select(.type == "result"))[-1].result // empty' "$EXECUTION" > "$NOTES" 2>/dev/null || true
+           eval "$CHECK"
