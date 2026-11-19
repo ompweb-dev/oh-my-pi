@@ -6,7 +6,8 @@ name: omp oml build
 # ompweb-omp.sha256, ompweb-omp.json), which ompweb hosts fetch from the release.
 # A red build opens an issue and publishes nothing. No repair agent.
 #
-# This workflow is push-triggered. The sync schedule in omp-sync.yml runs only
+# This workflow is push-triggered. Dispatched on another branch it builds and tests
+# without releasing or opening an issue. The sync schedule in omp-sync.yml runs only
 # once oml is the repository default branch.
 #
 # Every binary, native addon and npm package carries
@@ -530,10 +531,10 @@ jobs:
 
    # Runs no fork code: attaches the built binaries, ompweb's runner and npm packages
    # to a release on the fork. Does not move integration-release (frozen) or oml (the
-   # push already updated it).
+   # push already updated it). A run dispatched on another branch builds and tests only.
    release:
       needs: [version, build, runner, pack, smoke-gate]
-      if: ${{ !cancelled() && needs.build.result == 'success' && needs.runner.result == 'success' && needs.pack.result == 'success' && needs.smoke-gate.result == 'success' }}
+      if: ${{ !cancelled() && github.ref == 'refs/heads/oml' && needs.build.result == 'success' && needs.runner.result == 'success' && needs.pack.result == 'success' && needs.smoke-gate.result == 'success' }}
       runs-on: ubuntu-24.04
       environment: fork-build
       timeout-minutes: 30
@@ -623,7 +624,7 @@ jobs:
 
    fail:
       needs: [build, runner, pack, smoke-gate, release]
-      if: ${{ !cancelled() && (needs.build.result == 'failure' || needs.runner.result == 'failure' || needs.pack.result == 'failure' || needs.smoke-gate.result == 'failure' || needs.release.result == 'failure') }}
+      if: ${{ !cancelled() && github.ref == 'refs/heads/oml' && (needs.build.result == 'failure' || needs.runner.result == 'failure' || needs.pack.result == 'failure' || needs.smoke-gate.result == 'failure' || needs.release.result == 'failure') }}
       runs-on: ubuntu-24.04
       timeout-minutes: 10
       permissions:
