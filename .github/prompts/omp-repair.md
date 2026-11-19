@@ -27,6 +27,7 @@ Re-run the script (with `FORMAT_CMD`) until it prints `status=ancestor`. It repo
 
 - Push, open issues or pull requests, or edit `.github/` except to keep foreign workflow files deleted.
 - Rebase or push a pull-request branch. A patch reaches oml only as a commit on oml. Closing an upstream PR does not remove it; that takes an explicit revert on oml.
+- Run `bun run gen:models`: it queries providers live and rewrites the catalog to whatever they list today. For a `packages/catalog/src/models.json` conflict, take the release's file (`git checkout --theirs`), then re-add each model oml added over the previous upstream tag, decoding and re-encoding with `openModelCatalog` and `encodeModelCatalog` (`packages/catalog/src/model-catalog-format.ts`). Re-encoding the release's catalog unchanged must reproduce it byte for byte. `bun run gen:compat` is offline and fine.
 - Delete, skip, or weaken a test, and do not edit a test to match broken behavior.
 
 Write `$RUNNER_TEMP/repair-notes.md` before you exit: what stopped, what you changed, and why. If you cannot finish, write why there and exit non-zero.
