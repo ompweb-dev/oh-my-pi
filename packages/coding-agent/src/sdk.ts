@@ -281,10 +281,7 @@ import {
 	type SettingsGatedToolDelta,
 	type SystemPromptRebuilder,
 } from "./session/session-tools";
-import {
-	anthropicSlowModeHasNoSiblingHeadroom,
-	prefersSlowModeOverUsageFallback,
-} from "./session/anthropic-slow-mode";
+import { anthropicSlowModeHasNoSiblingHeadroom, prefersSlowModeOverUsageFallback } from "./session/anthropic-slow-mode";
 import {
 	CacheWarmer,
 	type CacheWarmingMode,
