@@ -5,6 +5,13 @@
 ### Added
 
 - Developer messages accept an optional `passiveToolContext` marker so hosts can recognize passive context emitted after a tool batch ([#13269](https://github.com/can1357/oh-my-pi/pull/13269) by [@andrebrait](https://github.com/andrebrait)).
+## [19.0.0] - 2026-11-18
+
+### Added
+
+- Added tray state and interaction properties, including focus, peek, quiet, main status, item references, card status and actions, and event state.
+- Added layout transition properties to nodes for coordinating layout animations.
+- Added support for folding a dock composer into its compact row.
 
 ## [18.22.0] - 2026-11-16
 

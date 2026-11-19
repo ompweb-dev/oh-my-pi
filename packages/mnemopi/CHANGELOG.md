@@ -22,6 +22,11 @@
 
 - `PolyphonicRecallEngine.temporalVoice()` now takes the ids of the memories the other voices surfaced as its second argument and only scores those ([#15896](https://github.com/can1357/oh-my-pi/pull/15896) by [@andrebrait](https://github.com/andrebrait))
 - Recall omits zero-weight memories even when an explicit `veracity` filter selects them, and derived facts now obey that filter using their source memory's label; use `get(id)` for raw inspection of known-false or otherwise excluded rows ([#15896](https://github.com/can1357/oh-my-pi/pull/15896) by [@andrebrait](https://github.com/andrebrait))
+## [18.22.1] - 2026-11-17
+
+### Fixed
+
+- Fixed embedding requests failing when oversized inputs were clipped in the middle of an emoji or other Unicode character.
 
 ## [18.21.0] - 2026-11-16
 
