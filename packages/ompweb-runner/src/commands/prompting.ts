@@ -438,10 +438,9 @@ export const promptingCommands: CommandTable = {
 		if (args.customInstructions !== undefined && typeof args.customInstructions !== "string") {
 			throw new Error("handoff: customInstructions must be a string");
 		}
-		// Resetting the agent mid-stream lets the live turn emit into a torn-down session (the TUI's guard).
-		if (session.isStreaming) throw new Error("Cannot hand off while a response is in progress");
-		const result = await session.handoff(args.customInstructions);
-		return result ? { savedPath: result.savedPath } : null;
+		// Since omp 19 a handoff is a manual compaction; it no longer interrupts a live turn.
+		await session.compact(args.customInstructions, { mode: "handoff" });
+		return {};
 	},
 	async goal(ctx, args) {
 		const op = GOAL_OPS.find(candidate => candidate === args.op);
