@@ -1,0 +1,58 @@
+name: omp sync agent
+description: >-
+   One agent round of the upstream sync: Claude (anthropics/claude-code-action)
+   on the prompt, then `check`. The round fails when `check` fails. The agent's
+   final message goes to $RUNNER_TEMP/notes/<name>.md.
+inputs:
+   name:
+      description: Round name (resolve or fix), used for the notes file
+      required: true
+   instructions:
+      description: Prompt file under .github/prompts
+      required: true
+   context:
+      description: File appended to the instructions (failure details)
+      required: true
+   check:
+      description: Shell command that exits 0 once the round's goal is met
+      required: true
+   anthropic-api-key:
+      required: true
+   github-token:
+      required: true
+runs:
+   using: composite
+   steps:
+      - id: prompt
+        shell: bash
+        env:
+           NAME: ${{ inputs.name }}
+           INSTRUCTIONS: ${{ inputs.instructions }}
+           CONTEXT: ${{ inputs.context }}
+        run: |
+           set -euo pipefail
+           mkdir -p "$RUNNER_TEMP/notes"
+           prompt="$RUNNER_TEMP/prompt-$NAME.md"
+           { cat "$INSTRUCTIONS"; printf '\n'; cat "$CONTEXT"; } > "$prompt"
+           echo "file=$prompt" >> "$GITHUB_OUTPUT"
+      # The agent runs bun, bazel and tests, so Bash is unrestricted. The runner is
+      # ephemeral, the checkout holds no credentials and the job token is read-only.
+      - id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@06ff7b0ede7cd9ab01b95720b4768948f3779779 # v1.0.283
+        with:
+           anthropic_api_key: ${{ inputs.anthropic-api-key }}
+           github_token: ${{ inputs.github-token }}
+           prompt: Read ${{ steps.prompt.outputs.file }} and do what it says.
+           claude_args: >-
+              --model claude-haiku-5-5
+              --effort medium
+              --allowedTools Bash,Read,Edit,MultiEdit,Write,Glob,Grep
+      - shell: bash
+        env:
+           CHECK: ${{ inputs.check }}
+           EXECUTION: ${{ steps.claude.outputs.execution_file }}
+           NOTES: ${{ runner.temp }}/notes/${{ inputs.name }}.md
+        run: |
+           [ -z "$EXECUTION" ] || jq -r 'map(select(.type == "result"))[-1].result // empty' "$EXECUTION" > "$NOTES" 2>/dev/null || true
+           eval "$CHECK"
