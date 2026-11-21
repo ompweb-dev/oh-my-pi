@@ -22,6 +22,13 @@
 
 - `PolyphonicRecallEngine.temporalVoice()` now takes the ids of the memories the other voices surfaced as its second argument and only scores those ([#15896](https://github.com/can1357/oh-my-pi/pull/15896) by [@andrebrait](https://github.com/andrebrait))
 - Recall omits zero-weight memories even when an explicit `veracity` filter selects them, and derived facts now obey that filter using their source memory's label; use `get(id)` for raw inspection of known-false or otherwise excluded rows ([#15896](https://github.com/can1357/oh-my-pi/pull/15896) by [@andrebrait](https://github.com/andrebrait))
+
+## [19.1.0] - 2026-11-21
+
+### Fixed
+
+- Improved diagnostics when a configured embedding provider fails, making provider errors visible in logs while preserving the existing fallback behavior.
+
 ## [18.22.1] - 2026-11-17
 
 ### Fixed

@@ -21,7 +21,7 @@ import {
 import type { TurnlessAgent } from "./turn-gate";
 
 import { cfgEditStreamingAbort } from "../edit/settings";
-import { writeDeviceName } from "../tools/resolve";
+import { toolCommandCallName } from "../tools/tool-commands";
 import {
 	cfgModelLoopGuardEnabled,
 	cfgModelLoopGuardToolCallReminder,
@@ -260,7 +260,11 @@ export class LoopGuards {
 			.filter((tool): tool is string => typeof tool === "string" && tool.length > 0);
 		const settingsKey = `${threshold}:${JSON.stringify(exemptTools)}`;
 		if (!this.#toolCallLoopGuard || this.#toolCallLoopGuardSettingsKey !== settingsKey) {
-			this.#toolCallLoopGuard = new ToolCallLoopGuard({ threshold, exemptTools, exemptionAlias: writeDeviceName });
+			this.#toolCallLoopGuard = new ToolCallLoopGuard({
+				threshold,
+				exemptTools,
+				exemptionAlias: toolCommandCallName,
+			});
 			this.#toolCallLoopGuardSettingsKey = settingsKey;
 		}
 		return this.#toolCallLoopGuard;

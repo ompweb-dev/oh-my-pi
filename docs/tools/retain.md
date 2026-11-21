@@ -29,7 +29,7 @@
 - The tool is registered only for `memory.backend = "hindsight"`, `"mnemopi"`, or `"mnemosyne-oss"`; it is absent for `"off"` and `"local"`. Hindsight additionally requires a non-empty configured API URL (`isHindsightConfigured(loadHindsightConfig(...))`).
 - In unrestricted sessions with an explicit tool list, registration auto-includes the shared `recall`/`retain`/`reflect` set for any supported backend. Restricted lists are not widened.
 - Mnemosyne OSS writes each item synchronously into its resolved retain bank and rejects `scope: "global"` like Hindsight. A failed item stops the batch and names the ids already stored. Its shared/default clear policy only blocks `/memory clear`, never `retain`; see [Mnemosyne OSS memory backend](../mnemosyne-oss-memory-backend.md#clear-policy).
-- In an ordinary `tools.xdev` session, discoverable built-ins may be presented as `xd://retain`; an explicitly requested tool remains top-level.
+- In an ordinary `tools.commands` session with `bash` active, discoverable built-ins are presented as tool commands (`retain --help`, `retain <args>` in `bash`); an explicitly requested tool remains top-level.
 - Execution returns one final result and has no progress callback or cancellation parameter.
 
 ## Inputs

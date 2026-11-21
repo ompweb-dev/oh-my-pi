@@ -14,7 +14,7 @@
 - Registration requires `memory.backend = "mnemopi"` or `"mnemosyne-oss"`; the tool is absent for `"off"`, `"local"`, and `"hindsight"`.
 - In an unrestricted session with an explicit tool list, registration auto-includes `memory_edit` for either backend. Restricted lists are not widened.
 - Mnemosyne OSS edits only rows in its initialized recall banks through the SDK (`update(content, importance)`, `forget`, `invalidate(replacement_id)`), honoring SDK authorization; OMP never writes its SQLite tables directly. Read the full record with `memory://<id>` first.
-- In an ordinary `tools.xdev` session, discoverable built-ins may be presented as `xd://memory_edit`; an explicitly requested tool remains top-level.
+- In an ordinary `tools.commands` session with `bash` active, discoverable built-ins are presented as tool commands (`memory_edit --help`, `memory_edit <args>` in `bash`); an explicitly requested tool remains top-level.
 - Execution is synchronous and single-shot, with no progress callback or cancellation parameter.
 
 ## Inputs

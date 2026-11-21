@@ -23,7 +23,7 @@
 - The tool is registered only for `memory.backend = "hindsight"`, `"mnemopi"`, or `"mnemosyne-oss"`; it is absent for `"off"` and `"local"`. Hindsight additionally requires a non-empty configured API URL (`isHindsightConfigured(loadHindsightConfig(...))`).
 - In unrestricted sessions with an explicit tool list, registration auto-includes the shared `recall`/`retain`/`reflect` set for any supported backend. Restricted lists are not widened.
 - Mnemosyne OSS results carry ids, so `read memory://<id>` and `memory_edit` can address them; it searches only the initialized recall banks.
-- In an ordinary `tools.xdev` session, discoverable built-ins may be presented as `xd://recall`; an explicitly requested tool remains top-level.
+- In an ordinary `tools.commands` session with `bash` active, discoverable built-ins are presented as tool commands (`recall --help`, `recall <args>` in `bash`); an explicitly requested tool remains top-level.
 - Execution is single-shot. The tool does not emit streaming argument/result updates.
 
 ## Inputs
