@@ -526,22 +526,28 @@ function orderedByTimestamp(a: SessionTreeNode, b: SessionTreeNode): number {
 }
 
 /**
- * The most recent model role on `branch`, or undefined when no model change
- * was recorded. `skipEphemeral` passes over temporary switches (retry fallback
+ * The most recent model role on `branch`, or undefined when no model change was
+ * recorded. `skipEphemeral` passes over temporary switches (retry fallback
  * hops, prewalk, context promotion), returning the role last assigned.
+ * `preserveMissingRole` keeps a role-less model-change entry distinct from `default`.
  */
 export function lastModelChangeRole(
 	branch: readonly SessionEntry[],
-	options?: { skipEphemeral?: boolean },
+	options?: { skipEphemeral?: boolean; preserveMissingRole?: boolean },
 ): string | undefined {
 	for (let index = branch.length - 1; index >= 0; index--) {
 		const entry = branch[index];
 		if (entry.type !== "model_change") continue;
-		const role = entry.role ?? "default";
-		if (options?.skipEphemeral && (role === EPHEMERAL_MODEL_CHANGE_ROLE || role === PREWALK_MODEL_CHANGE_ROLE)) {
+		const role = entry.role;
+		if (role === undefined && options?.preserveMissingRole) return undefined;
+		const effectiveRole = role ?? "default";
+		if (
+			options?.skipEphemeral &&
+			(effectiveRole === EPHEMERAL_MODEL_CHANGE_ROLE || effectiveRole === PREWALK_MODEL_CHANGE_ROLE)
+		) {
 			continue;
 		}
-		return role;
+		return effectiveRole;
 	}
 	return undefined;
 }
@@ -3901,7 +3907,7 @@ export class SessionManager {
 	 * switches (retry fallback hops, prewalk, context promotion), returning the
 	 * role the session was last assigned.
 	 */
-	getLastModelChangeRole(options?: { skipEphemeral?: boolean }): string | undefined {
+	getLastModelChangeRole(options?: { skipEphemeral?: boolean; preserveMissingRole?: boolean }): string | undefined {
 		return lastModelChangeRole(this.#index.branchView(), options);
 	}
 
@@ -3950,6 +3956,15 @@ export class SessionManager {
 	 */
 	getBranch(fromId?: string): SessionEntry[] {
 		return this.#index.pathTo(fromId ?? this.#index.leafId());
+	}
+
+	/**
+	 * All session entries (excludes header) without the defensive copy. The
+	 * array is live and owned by the manager: never mutate it, and use
+	 * `getEntries()` when you need a snapshot that survives appends.
+	 */
+	getEntriesView(): readonly SessionEntry[] {
+		return this.#entries;
 	}
 
 	/**
@@ -4564,23 +4579,24 @@ export class SessionManager {
 		const breadcrumb = await readTerminalBreadcrumbEntry();
 		let chosenSession: string | null | undefined;
 
-		if (breadcrumb) {
+		if (breadcrumb?.fresh && !breadcrumb.exists) {
 			// A lazy fresh-session boundary whose JSONL was never materialized
 			// (for example, initial creation followed by exit before any assistant
-			// output). Honor the boundary rather than falling back to
-			// findMostRecentSession(), which would resurrect an older transcript.
+			// output). In its own cwd, honor the boundary rather than falling back to
+			// findMostRecentNonEmptySession(), which would resurrect an older
+			// transcript. From another cwd it names no transcript to resume or
+			// relocate, so this cwd's newest session wins.
 			// Explicit newSession() boundaries are materialized before it returns so
 			// this remains correct even when the relaunch has a different terminal id.
 			if (
-				breadcrumb.fresh &&
-				!breadcrumb.exists &&
+				path.resolve(breadcrumb.cwd) === resolvedCwd &&
 				(!sessionDir || pathIsWithin(dir, path.dirname(breadcrumb.sessionFile)))
 			) {
 				const manager = new SessionManager(cwd, dir, true, storage);
 				manager.#resetToNewSession();
 				return manager;
 			}
-
+		} else if (breadcrumb) {
 			// Recover stale crumbs: a subagent open (pre-fix) may have pointed this
 			// terminal's breadcrumb at an artifact child; resume the parent instead.
 			breadcrumb.sessionFile = resolveBreadcrumbToInteractiveRoot(breadcrumb.sessionFile);
